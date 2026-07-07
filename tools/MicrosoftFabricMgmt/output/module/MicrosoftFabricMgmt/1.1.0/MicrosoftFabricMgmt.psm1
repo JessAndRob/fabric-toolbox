@@ -26148,6 +26148,92 @@ function Update-FabricGraphQLApiDefinition {
 }
 }
 #EndRegion '.\Public\GraphQLApi\Update-FabricGraphQLApiDefinition.ps1' 130
+#Region '.\Public\Items\Add-FabricItemTag.ps1' -1
+
+<#
+.SYNOPSIS
+    Applies one or more tags to a Fabric item.
+
+.DESCRIPTION
+    The Add-FabricItemTag function applies tags to an item via
+    `POST /workspaces/{workspaceId}/items/{itemId}/applyTags`. Tags are referenced by their tag ids
+    (see Get-FabricTag).
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the item. Mandatory.
+
+.PARAMETER ItemId
+    The unique identifier of the item to tag. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER TagId
+    One or more tag identifiers to apply. Mandatory. Accepts an array.
+
+.EXAMPLE
+    Add-FabricItemTag -WorkspaceId $ws -ItemId $id -TagId $tag1, $tag2
+
+    Applies both tags to the item.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/items/{itemId}/applyTags
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Add-FabricItemTag {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ItemId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string[]]$TagId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', $ItemId, 'applyTags')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                tags = @($TagId | ForEach-Object { @{ id = $_ } })
+            }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Item '$ItemId'", "Apply $($TagId.Count) tag(s)")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Applied $($TagId.Count) tag(s) to item '$ItemId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to apply tags to item '$ItemId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Items\Add-FabricItemTag.ps1' 84
 #Region '.\Public\Items\Get-FabricItem.ps1' -1
 
 <#
@@ -26487,6 +26573,853 @@ function Get-FabricItemConnection {
     }
 }
 #EndRegion '.\Public\Items\Get-FabricItemConnection.ps1' 191
+#Region '.\Public\Items\Get-FabricItemDefinition.ps1' -1
+
+<#
+.SYNOPSIS
+    Retrieves the definition of a Fabric item.
+
+.DESCRIPTION
+    The Get-FabricItemDefinition function retrieves an item's definition via
+    `POST /workspaces/{workspaceId}/items/{itemId}/getDefinition`. This is the generic definition
+    getter that works for any item type that supports definitions. The call is long-running; the
+    module transparently waits for and returns the completed definition.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the item. Mandatory.
+
+.PARAMETER ItemId
+    The unique identifier of the item whose definition is retrieved. Mandatory. Binds from the
+    pipeline via the 'id' alias.
+
+.PARAMETER Format
+    Optional definition format to request (item-type specific, e.g. 'ipynb' for notebooks).
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    Get-FabricItemDefinition -WorkspaceId $ws -ItemId $id
+
+    Retrieves the definition of the item in the default format.
+
+.EXAMPLE
+    Get-FabricItemDefinition -WorkspaceId $ws -ItemId $id -Format ipynb
+
+    Retrieves the notebook definition in ipynb format.
+
+.OUTPUTS
+    System.Object
+    The item definition (format plus base64-encoded parts).
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/items/{itemId}/getDefinition
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricItemDefinition {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ItemId,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$Format,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', $ItemId, 'getDefinition')
+            if ($Format) {
+                $apiEndpointURI = "{0}?format={1}" -f $apiEndpointURI, $Format
+            }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if ($Raw) {
+                return $response
+            }
+
+            Write-FabricLog -Message "Definition for item '$ItemId' retrieved successfully." -Level Debug
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve definition for item '$ItemId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Items\Get-FabricItemDefinition.ps1' 94
+#Region '.\Public\Items\Move-FabricItem.ps1' -1
+
+<#
+.SYNOPSIS
+    Moves a Fabric item into a workspace folder.
+
+.DESCRIPTION
+    The Move-FabricItem function moves an item to a target folder via
+    `POST /workspaces/{workspaceId}/items/{itemId}/move`. Omit -TargetFolderId (or pass an empty
+    string) to move the item to the workspace root.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the item. Mandatory.
+
+.PARAMETER ItemId
+    The unique identifier of the item to move. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER TargetFolderId
+    The unique identifier of the destination folder. When omitted, the item moves to the workspace root.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Move-FabricItem -WorkspaceId $ws -ItemId $id -TargetFolderId $folder
+
+    Moves the item into the specified folder.
+
+.EXAMPLE
+    Move-FabricItem -WorkspaceId $ws -ItemId $id
+
+    Moves the item to the workspace root.
+
+.OUTPUTS
+    System.Object
+    The moved item object with all API-returned properties plus a resolved WorkspaceName.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/items/{itemId}/move
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Move-FabricItem {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ItemId,
+
+        [Parameter()]
+        [string]$TargetFolderId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', $ItemId, 'move')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{}
+            if ($PSBoundParameters.ContainsKey('TargetFolderId')) { $body.targetFolderId = $TargetFolderId }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Item '$ItemId'", "Move item")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+
+                if (-not $response) {
+                    Write-FabricLog -Message "No response returned after moving item '$ItemId'." -Level Warning
+                    return $null
+                }
+
+                if ($Raw) {
+                    return $response
+                }
+
+                $workspaceName = $WorkspaceId
+                try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+                catch { $workspaceName = $WorkspaceId }
+                $response | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+
+                $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.Item'
+                Write-FabricLog -Message "Item '$ItemId' moved successfully." -Level Host
+                return $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to move item '$ItemId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Items\Move-FabricItem.ps1' 109
+#Region '.\Public\Items\Move-FabricItemBulk.ps1' -1
+
+<#
+.SYNOPSIS
+    Moves multiple Fabric items into a workspace folder in one request.
+
+.DESCRIPTION
+    The Move-FabricItemBulk function moves a set of items to a target folder via
+    `POST /workspaces/{workspaceId}/items/bulkMove`. Omit -TargetFolderId to move the items to the
+    workspace root.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the items. Mandatory.
+
+.PARAMETER ItemId
+    One or more item identifiers to move. Mandatory. Accepts an array and binds from the pipeline via
+    the 'id' alias.
+
+.PARAMETER TargetFolderId
+    The unique identifier of the destination folder. When omitted, the items move to the workspace root.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    Move-FabricItemBulk -WorkspaceId $ws -ItemId $id1, $id2 -TargetFolderId $folder
+
+    Moves both items into the specified folder.
+
+.EXAMPLE
+    Get-FabricItem -WorkspaceId $ws | Where-Object type -eq 'Report' | Move-FabricItemBulk -WorkspaceId $ws -TargetFolderId $folder
+
+    Moves every report into the target folder in a single bulk request.
+
+.OUTPUTS
+    System.Object
+    The API response (or completed long-running operation result).
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/items/bulkMove
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Move-FabricItemBulk {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string[]]$ItemId,
+
+        [Parameter()]
+        [string]$TargetFolderId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    begin {
+        $collectedIds = [System.Collections.Generic.List[string]]::new()
+    }
+
+    process {
+        foreach ($id in $ItemId) {
+            $collectedIds.Add($id)
+        }
+    }
+
+    end {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', 'bulkMove')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                items = @($collectedIds | ForEach-Object { @{ id = $_ } })
+            }
+            if ($PSBoundParameters.ContainsKey('TargetFolderId')) { $body.targetFolderId = $TargetFolderId }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("$($collectedIds.Count) item(s) in workspace '$WorkspaceId'", "Bulk move items")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "$($collectedIds.Count) item(s) moved successfully." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to bulk move items. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Items\Move-FabricItemBulk.ps1' 106
+#Region '.\Public\Items\New-FabricItem.ps1' -1
+
+<#
+.SYNOPSIS
+    Creates a new Fabric item of any type in a workspace.
+
+.DESCRIPTION
+    The New-FabricItem function creates an item via `POST /workspaces/{workspaceId}/items`. This is
+    the generic creator that works for any item type (use the type-specific New-Fabric* commands
+    when you need type-specific conveniences). An optional definition and creation payload can be
+    supplied for types that require them.
+
+    The created item is returned enriched with a resolved WorkspaceName and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace to create the item in. Mandatory.
+
+.PARAMETER DisplayName
+    The display name for the new item. Mandatory.
+
+.PARAMETER Type
+    The item type (e.g. Notebook, Lakehouse, Report). Mandatory. Additional types may be added by
+    Fabric over time, so this is not restricted to a fixed set.
+
+.PARAMETER Description
+    An optional description for the item.
+
+.PARAMETER FolderId
+    Optional workspace folder id to create the item inside.
+
+.PARAMETER Definition
+    Optional item definition hashtable (with 'format' and 'parts'). Required by some item types.
+
+.PARAMETER CreationPayload
+    Optional type-specific creation payload hashtable.
+
+.PARAMETER SensitivityLabelSettings
+    Optional sensitivity label settings hashtable.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    New-FabricItem -WorkspaceId $ws -DisplayName 'My Lakehouse' -Type Lakehouse
+
+    Creates a Lakehouse in the workspace.
+
+.EXAMPLE
+    New-FabricItem -WorkspaceId $ws -DisplayName 'Report1' -Type Report -Definition $def
+
+    Creates a Report from a supplied definition payload.
+
+.OUTPUTS
+    System.Object
+    The created item object with all API-returned properties plus a resolved WorkspaceName.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/items
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function New-FabricItem {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DisplayName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Type,
+
+        [Parameter()]
+        [string]$Description,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$FolderId,
+
+        [Parameter()]
+        [hashtable]$Definition,
+
+        [Parameter()]
+        [hashtable]$CreationPayload,
+
+        [Parameter()]
+        [hashtable]$SensitivityLabelSettings,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                displayName = $DisplayName
+                type        = $Type
+            }
+            if ($PSBoundParameters.ContainsKey('Description')) { $body.description = $Description }
+            if ($FolderId) { $body.folderId = $FolderId }
+            if ($Definition) { $body.definition = $Definition }
+            if ($CreationPayload) { $body.creationPayload = $CreationPayload }
+            if ($SensitivityLabelSettings) { $body.sensitivityLabelSettings = $SensitivityLabelSettings }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess($DisplayName, "Create Fabric $Type")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+
+                if (-not $response) {
+                    Write-FabricLog -Message "No response returned after creating item '$DisplayName'." -Level Warning
+                    return $null
+                }
+
+                if ($Raw) {
+                    return $response
+                }
+
+                $workspaceName = $WorkspaceId
+                try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+                catch { $workspaceName = $WorkspaceId }
+                $response | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+
+                $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.Item'
+                Write-FabricLog -Message "Item '$DisplayName' created successfully!" -Level Host
+                return $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to create item '$DisplayName'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Items\New-FabricItem.ps1' 152
+#Region '.\Public\Items\Remove-FabricItem.ps1' -1
+
+<#
+.SYNOPSIS
+    Removes a Fabric item from a workspace.
+
+.DESCRIPTION
+    The Remove-FabricItem function deletes an item via
+    `DELETE /workspaces/{workspaceId}/items/{itemId}`. This is the generic remover that works for
+    any item type.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the item. Mandatory.
+
+.PARAMETER ItemId
+    The unique identifier of the item to remove. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.EXAMPLE
+    Remove-FabricItem -WorkspaceId $ws -ItemId $id
+
+    Deletes the specified item.
+
+.EXAMPLE
+    Get-FabricItem -WorkspaceId $ws | Where-Object type -eq 'Report' | Remove-FabricItem -WorkspaceId $ws -Confirm:$false
+
+    Deletes every report in the workspace.
+
+.OUTPUTS
+    None.
+
+.NOTES
+    - API Endpoint: DELETE /workspaces/{workspaceId}/items/{itemId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricItem {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ItemId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', $ItemId)
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            if ($PSCmdlet.ShouldProcess("Item '$ItemId' in workspace '$WorkspaceId'", "Delete")) {
+                $apiParams = @{
+                    BaseURI = $apiEndpointURI
+                    Headers = $script:FabricAuthContext.FabricHeaders
+                    Method  = 'Delete'
+                }
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Item '$ItemId' removed successfully from workspace '$WorkspaceId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to remove item '$ItemId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Items\Remove-FabricItem.ps1' 72
+#Region '.\Public\Items\Remove-FabricItemTag.ps1' -1
+
+<#
+.SYNOPSIS
+    Removes one or more tags from a Fabric item.
+
+.DESCRIPTION
+    The Remove-FabricItemTag function unapplies tags from an item via
+    `POST /workspaces/{workspaceId}/items/{itemId}/unapplyTags`. Tags are referenced by their tag ids
+    (see Get-FabricTag).
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the item. Mandatory.
+
+.PARAMETER ItemId
+    The unique identifier of the item to untag. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER TagId
+    One or more tag identifiers to remove. Mandatory. Accepts an array.
+
+.EXAMPLE
+    Remove-FabricItemTag -WorkspaceId $ws -ItemId $id -TagId $tag1
+
+    Removes the tag from the item.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/items/{itemId}/unapplyTags
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricItemTag {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ItemId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string[]]$TagId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', $ItemId, 'unapplyTags')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                tags = @($TagId | ForEach-Object { @{ id = $_ } })
+            }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Item '$ItemId'", "Unapply $($TagId.Count) tag(s)")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Removed $($TagId.Count) tag(s) from item '$ItemId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to remove tags from item '$ItemId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Items\Remove-FabricItemTag.ps1' 84
+#Region '.\Public\Items\Update-FabricItem.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates the display name and/or description of a Fabric item.
+
+.DESCRIPTION
+    The Update-FabricItem function updates an item's metadata via
+    `PATCH /workspaces/{workspaceId}/items/{itemId}`. Only the supplied properties are sent. This is
+    the generic updater that works for any item type.
+
+    The updated item is returned enriched with a resolved WorkspaceName and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the item. Mandatory.
+
+.PARAMETER ItemId
+    The unique identifier of the item to update. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER DisplayName
+    The new display name for the item.
+
+.PARAMETER Description
+    The new description for the item.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Update-FabricItem -WorkspaceId $ws -ItemId $id -DisplayName 'Renamed'
+
+    Renames the item.
+
+.EXAMPLE
+    Get-FabricItem -WorkspaceId $ws | Where-Object displayName -eq 'Old' | Update-FabricItem -WorkspaceId $ws -Description 'Updated'
+
+    Updates the description of the matching item.
+
+.OUTPUTS
+    System.Object
+    The updated item object with all API-returned properties plus a resolved WorkspaceName.
+
+.NOTES
+    - API Endpoint: PATCH /workspaces/{workspaceId}/items/{itemId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricItem {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ItemId,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$DisplayName,
+
+        [Parameter()]
+        [string]$Description,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', $ItemId)
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{}
+            if ($PSBoundParameters.ContainsKey('DisplayName')) { $body.displayName = $DisplayName }
+            if ($PSBoundParameters.ContainsKey('Description')) { $body.description = $Description }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Patch'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Item '$ItemId'", "Update item")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+
+                if (-not $response) {
+                    Write-FabricLog -Message "No response returned after updating item '$ItemId'." -Level Warning
+                    return $null
+                }
+
+                if ($Raw) {
+                    return $response
+                }
+
+                $workspaceName = $WorkspaceId
+                try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+                catch { $workspaceName = $WorkspaceId }
+                $response | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+
+                $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.Item'
+                Write-FabricLog -Message "Item '$ItemId' updated successfully!" -Level Host
+                return $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update item '$ItemId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Items\Update-FabricItem.ps1' 120
+#Region '.\Public\Items\Update-FabricItemDefinition.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates the definition of a Fabric item.
+
+.DESCRIPTION
+    The Update-FabricItemDefinition function replaces an item's definition via
+    `POST /workspaces/{workspaceId}/items/{itemId}/updateDefinition`. This is the generic definition
+    updater that works for any item type that supports definitions. The call is long-running; the
+    module transparently waits for completion.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the item. Mandatory.
+
+.PARAMETER ItemId
+    The unique identifier of the item to update. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Definition
+    The item definition hashtable to apply, with 'format' (optional) and 'parts' (array of
+    @{ path; payload; payloadType }). Mandatory.
+
+.PARAMETER UpdateMetadata
+    If specified, instructs Fabric to also update item metadata (e.g. the .platform part) from the
+    supplied definition.
+
+.EXAMPLE
+    $def = @{ parts = @(@{ path = 'notebook-content.py'; payload = $b64; payloadType = 'InlineBase64' }) }
+    Update-FabricItemDefinition -WorkspaceId $ws -ItemId $id -Definition $def
+
+    Replaces the item's definition with the supplied parts.
+
+.OUTPUTS
+    System.Object
+    The API response (or completed long-running operation result).
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/items/{itemId}/updateDefinition
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricItemDefinition {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ItemId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable]$Definition,
+
+        [Parameter()]
+        [switch]$UpdateMetadata
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', $ItemId, 'updateDefinition')
+            if ($UpdateMetadata) {
+                $apiEndpointURI = "{0}?updateMetadata=true" -f $apiEndpointURI
+            }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ definition = $Definition }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Item '$ItemId'", "Update item definition")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Definition for item '$ItemId' updated successfully." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update definition for item '$ItemId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Items\Update-FabricItemDefinition.ps1' 94
 #Region '.\Public\Job Scheduler\Get-FabricItemJobInstance.ps1' -1
 
 <#
@@ -37307,6 +38240,117 @@ function New-FabricOneLakeShortcut {
     }
 }
 #EndRegion '.\Public\OneLake\New-FabricOneLakeShortcut.ps1' 229
+#Region '.\Public\OneLake\New-FabricOneLakeShortcutBulk.ps1' -1
+
+<#
+.SYNOPSIS
+    Creates multiple OneLake shortcuts in a single bulk request.
+
+.DESCRIPTION
+    The New-FabricOneLakeShortcutBulk function creates a batch of shortcuts under an item via
+    `POST /workspaces/{workspaceId}/items/{itemId}/shortcuts/bulkCreate`. Each shortcut request in
+    -CreateShortcutRequest is a hashtable matching the CreateShortcut schema (path, name, target).
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the item. Mandatory.
+
+.PARAMETER ItemId
+    The unique identifier of the item to create the shortcuts under. Mandatory. Binds from the
+    pipeline via the 'id' alias.
+
+.PARAMETER CreateShortcutRequest
+    An array of shortcut request hashtables (each with path, name, and target). Mandatory.
+
+.PARAMETER ShortcutConflictPolicy
+    Optional policy for handling name conflicts (e.g. Abort, GenerateUniqueName, CreateOrOverwrite).
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    $reqs = @(
+        @{ path = 'Files'; name = 'sc1'; target = @{ oneLake = @{ workspaceId = $ws; itemId = $lh; path = 'Tables/t1' } } }
+    )
+    New-FabricOneLakeShortcutBulk -WorkspaceId $ws -ItemId $lh -CreateShortcutRequest $reqs
+
+    Creates the shortcuts in bulk under the item.
+
+.OUTPUTS
+    System.Object
+    The API response (the created shortcuts, or completed long-running operation result).
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/items/{itemId}/shortcuts/bulkCreate
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function New-FabricOneLakeShortcutBulk {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ItemId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable[]]$CreateShortcutRequest,
+
+        [Parameter()]
+        [ValidateSet('Abort', 'GenerateUniqueName', 'CreateOrOverwrite')]
+        [string]$ShortcutConflictPolicy,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', $ItemId, 'shortcuts', 'bulkCreate')
+            if ($ShortcutConflictPolicy) {
+                $apiEndpointURI = "{0}?shortcutConflictPolicy={1}" -f $apiEndpointURI, $ShortcutConflictPolicy
+            }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                createShortcutRequests = $CreateShortcutRequest
+            }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 20
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Item '$ItemId'", "Bulk create $($CreateShortcutRequest.Count) shortcut(s)")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+
+                if ($Raw) {
+                    return $response
+                }
+
+                Write-FabricLog -Message "Bulk created $($CreateShortcutRequest.Count) shortcut(s) under item '$ItemId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to bulk create shortcuts under item '$ItemId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\OneLake\New-FabricOneLakeShortcutBulk.ps1' 109
 #Region '.\Public\OneLake\Remove-FabricOneLakeShortcut.ps1' -1
 
 <#

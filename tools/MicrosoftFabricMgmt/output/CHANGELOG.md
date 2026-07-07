@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Generic item operations** (10 new commands) filling the tenant-generic `/workspaces/{ws}/items`
+  gaps that had no wrapper: `New-FabricItem` / `Update-FabricItem` / `Remove-FabricItem`
+  (create/patch/delete any item type), `Get-FabricItemDefinition` / `Update-FabricItemDefinition`
+  (generic definition get/update, long-running), `Move-FabricItem` and `Move-FabricItemBulk`
+  (move one or many items to a folder), `Add-FabricItemTag` / `Remove-FabricItemTag`
+  (apply/unapply tags by id), and `New-FabricOneLakeShortcutBulk` (bulk shortcut creation).
+  Item-returning commands enrich with `WorkspaceName` + `MicrosoftFabric.Item` and honor `-Raw`;
+  mutating commands support `-WhatIf`/`-Confirm`.
 - **Fabric Gateways API** (11 new commands) covering all 13 `/gateways` endpoints:
   `Get-FabricGateway` (list + by-id), `New-FabricGateway` (virtual network gateways —
   the only type creatable via the API), `Update-FabricGateway` (type-aware body for

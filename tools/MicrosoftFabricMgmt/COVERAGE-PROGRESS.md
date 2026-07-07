@@ -52,7 +52,11 @@ Supporting work for bucket A:
 
 ---
 
-## Bucket B — Generic item ops (10)  ◐ scoped, ready to implement
+## Bucket B — Generic item ops (10)  ☑ COMPLETE
+
+All 10 implemented with behavior tests + CHANGELOG; build,test green
+(8874 passed / 0 failed / 1 skipped).
+
 
 These are the tenant-generic `/workspaces/{ws}/items[...]` operations that have **no** generic
 wrapper yet (per-resource variants and shortcuts/schedules/job-instances/external-data-shares
@@ -61,16 +65,16 @@ already exist — do NOT duplicate those). Schemas from `platform.platform.defin
 
 | # | Function | Method | Endpoint | Body / params | Status |
 |---|----------|--------|----------|---------------|--------|
-| 1 | New-FabricItem | POST | /items | CreateItemRequest: displayName(req), type(req), description, folderId, definition, creationPayload, sensitivityLabelSettings | ☐ |
-| 2 | Update-FabricItem | PATCH | /items/{itemId} | UpdateItemRequest: displayName, description | ☐ |
-| 3 | Remove-FabricItem | DELETE | /items/{itemId} | — | ☐ |
-| 4 | Get-FabricItemDefinition | POST | /items/{itemId}/getDefinition | query: format (optional); returns {definition:{format,parts[]}} — LRO 202 | ☐ |
-| 5 | Update-FabricItemDefinition | POST | /items/{itemId}/updateDefinition | query: updateMetadata; body UpdateItemDefinitionRequest{definition{format,parts[{path,payload,payloadType}]}} — LRO | ☐ |
-| 6 | Move-FabricItem | POST | /items/{itemId}/move | MoveItemRequest: targetFolderId | ☐ |
-| 7 | Move-FabricItemBulk | POST | /items/bulkMove | BulkMoveItemsRequest: targetFolderId, items[](req) | ☐ |
-| 8 | Add-FabricItemTag | POST | /items/{itemId}/applyTags | ApplyTagsRequest: tags[](req) (array of {id}) | ☐ |
-| 9 | Remove-FabricItemTag | POST | /items/{itemId}/unapplyTags | UnapplyTagsRequest: tags[](req) | ☐ |
-| 10 | New-FabricOneLakeShortcutBulk | POST | /items/{itemId}/shortcuts/bulkCreate | query: shortcutConflictPolicy; BulkCreateShortcutsRequest: createShortcutRequests[](req) | ☐ |
+| 1 | New-FabricItem | POST | /items | CreateItemRequest: displayName(req), type(req), description, folderId, definition, creationPayload, sensitivityLabelSettings | ☑ |
+| 2 | Update-FabricItem | PATCH | /items/{itemId} | UpdateItemRequest: displayName, description | ☑ |
+| 3 | Remove-FabricItem | DELETE | /items/{itemId} | — | ☑ |
+| 4 | Get-FabricItemDefinition | POST | /items/{itemId}/getDefinition | query: format (optional); returns {definition:{format,parts[]}} — LRO 202 | ☑ |
+| 5 | Update-FabricItemDefinition | POST | /items/{itemId}/updateDefinition | query: updateMetadata; body UpdateItemDefinitionRequest{definition{format,parts[{path,payload,payloadType}]}} — LRO | ☑ |
+| 6 | Move-FabricItem | POST | /items/{itemId}/move | MoveItemRequest: targetFolderId | ☑ |
+| 7 | Move-FabricItemBulk | POST | /items/bulkMove | BulkMoveItemsRequest: targetFolderId, items[](req) | ☑ |
+| 8 | Add-FabricItemTag | POST | /items/{itemId}/applyTags | ApplyTagsRequest: tags[](req) (array of {id}) | ☑ |
+| 9 | Remove-FabricItemTag | POST | /items/{itemId}/unapplyTags | UnapplyTagsRequest: tags[](req) | ☑ |
+| 10 | New-FabricOneLakeShortcutBulk | POST | /items/{itemId}/shortcuts/bulkCreate | query: shortcutConflictPolicy; BulkCreateShortcutsRequest: createShortcutRequests[](req) | ☑ |
 
 Notes:
 - 4 & 5 are long-running (202 + operation polling) — follow the existing `*Definition` command
