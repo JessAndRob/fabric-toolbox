@@ -52,7 +52,34 @@ Supporting work for bucket A:
 
 ---
 
-## Bucket B — Generic item ops (~10)  ☐ (not started)
+## Bucket B — Generic item ops (10)  ◐ scoped, ready to implement
+
+These are the tenant-generic `/workspaces/{ws}/items[...]` operations that have **no** generic
+wrapper yet (per-resource variants and shortcuts/schedules/job-instances/external-data-shares
+already exist — do NOT duplicate those). Schemas from `platform.platform.definitions.json` /
+`platform.tags.definitions.json`.
+
+| # | Function | Method | Endpoint | Body / params | Status |
+|---|----------|--------|----------|---------------|--------|
+| 1 | New-FabricItem | POST | /items | CreateItemRequest: displayName(req), type(req), description, folderId, definition, creationPayload, sensitivityLabelSettings | ☐ |
+| 2 | Update-FabricItem | PATCH | /items/{itemId} | UpdateItemRequest: displayName, description | ☐ |
+| 3 | Remove-FabricItem | DELETE | /items/{itemId} | — | ☐ |
+| 4 | Get-FabricItemDefinition | POST | /items/{itemId}/getDefinition | query: format (optional); returns {definition:{format,parts[]}} — LRO 202 | ☐ |
+| 5 | Update-FabricItemDefinition | POST | /items/{itemId}/updateDefinition | query: updateMetadata; body UpdateItemDefinitionRequest{definition{format,parts[{path,payload,payloadType}]}} — LRO | ☐ |
+| 6 | Move-FabricItem | POST | /items/{itemId}/move | MoveItemRequest: targetFolderId | ☐ |
+| 7 | Move-FabricItemBulk | POST | /items/bulkMove | BulkMoveItemsRequest: targetFolderId, items[](req) | ☐ |
+| 8 | Add-FabricItemTag | POST | /items/{itemId}/applyTags | ApplyTagsRequest: tags[](req) (array of {id}) | ☐ |
+| 9 | Remove-FabricItemTag | POST | /items/{itemId}/unapplyTags | UnapplyTagsRequest: tags[](req) | ☐ |
+| 10 | New-FabricOneLakeShortcutBulk | POST | /items/{itemId}/shortcuts/bulkCreate | query: shortcutConflictPolicy; BulkCreateShortcutsRequest: createShortcutRequests[](req) | ☐ |
+
+Notes:
+- 4 & 5 are long-running (202 + operation polling) — follow the existing `*Definition` command
+  pattern (see `Get-FabricNotebookDefinition` / `Update-FabricNotebookDefinition`) for LRO handling.
+- Enrichment: Get-FabricItemDefinition returns a definition blob (no id/name to resolve) — decorate
+  minimally; New/Update/Move return the item or 202 — enrich with WorkspaceName where an item is returned.
+- Confirm `New-FabricItem`/`Update-FabricItem`/`Remove-FabricItem`/`Get-FabricItemDefinition` truly
+  absent before writing (grep confirmed absent 2026-07-07).
+
 ## Bucket C+D — Per-resource + small fixes (~60)  ☐ (not started)
 ## Bucket E — Power BI Admin + Gateways (15)  ☐ (not started)
 ## Bucket F — Legacy Power BI (~216)  ⊘ pending scope confirmation from user
