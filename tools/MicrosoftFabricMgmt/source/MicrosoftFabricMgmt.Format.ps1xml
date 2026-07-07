@@ -1506,5 +1506,115 @@
       </TableControl>
     </View>
 
+    <!--
+    ================================================================================
+    Gateway (MicrosoftFabric.Gateway) - Get-FabricGateway / New / Update
+    ================================================================================
+    -->
+    <View>
+      <Name>GatewayView</Name>
+      <ViewSelectedBy>
+        <TypeName>MicrosoftFabric.Gateway</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader><Label>Gateway Name</Label><Width>30</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Type</Label><Width>18</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Capacity Name</Label><Width>25</Width></TableColumnHeader>
+          <TableColumnHeader><Label>ID</Label></TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.displayName) { $_.displayName } else { 'N/A' }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem><PropertyName>type</PropertyName></TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>
+                  if ($_.CapacityName) { $_.CapacityName }
+                  elseif ($_.capacityId) { try { Resolve-FabricCapacityName -CapacityId $_.capacityId } catch { $_.capacityId } }
+                  else { 'N/A' }
+                </ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem><PropertyName>id</PropertyName></TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+
+    <!--
+    ================================================================================
+    Gateway member (MicrosoftFabric.GatewayMember) - Get-FabricGatewayMember
+    ================================================================================
+    -->
+    <View>
+      <Name>GatewayMemberView</Name>
+      <ViewSelectedBy>
+        <TypeName>MicrosoftFabric.GatewayMember</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader><Label>Gateway Name</Label><Width>25</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Member Name</Label><Width>30</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Version</Label><Width>14</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Enabled</Label><Width>9</Width></TableColumnHeader>
+          <TableColumnHeader><Label>ID</Label></TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.GatewayName) { $_.GatewayName } else { $_.GatewayId }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem><PropertyName>displayName</PropertyName></TableColumnItem>
+              <TableColumnItem><PropertyName>version</PropertyName></TableColumnItem>
+              <TableColumnItem><PropertyName>enabled</PropertyName></TableColumnItem>
+              <TableColumnItem><PropertyName>id</PropertyName></TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+
+    <!--
+    ================================================================================
+    Gateway role assignment (MicrosoftFabric.GatewayRoleAssignment)
+    ================================================================================
+    -->
+    <View>
+      <Name>GatewayRoleAssignmentView</Name>
+      <ViewSelectedBy>
+        <TypeName>MicrosoftFabric.GatewayRoleAssignment</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader><Label>Gateway Name</Label><Width>25</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Principal</Label><Width>30</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Principal Type</Label><Width>16</Width></TableColumnHeader>
+          <TableColumnHeader><Label>Role</Label><Width>28</Width></TableColumnHeader>
+          <TableColumnHeader><Label>ID</Label></TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.GatewayName) { $_.GatewayName } else { $_.GatewayId }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.principal) { $_.principal.displayName } else { 'N/A' }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.principal) { $_.principal.type } else { 'N/A' }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem><PropertyName>role</PropertyName></TableColumnItem>
+              <TableColumnItem><PropertyName>id</PropertyName></TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+
   </ViewDefinitions>
 </Configuration>

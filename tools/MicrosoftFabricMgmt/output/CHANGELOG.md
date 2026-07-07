@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Fabric Gateways API** (11 new commands) covering all 13 `/gateways` endpoints:
+  `Get-FabricGateway` (list + by-id), `New-FabricGateway` (virtual network gateways —
+  the only type creatable via the API), `Update-FabricGateway` (type-aware body for
+  VirtualNetwork / OnPremises), `Remove-FabricGateway`, `Get/Update/Remove-FabricGatewayMember`,
+  and `Get/Add/Update/Remove-FabricGatewayRoleAssignment`. Getters enrich with resolved
+  `CapacityName` / `GatewayName`, decorate as `MicrosoftFabric.Gateway` / `.GatewayMember` /
+  `.GatewayRoleAssignment` (new format views), and honor `-Raw`; mutating commands support
+  `-WhatIf`/`-Confirm`. Roles: `Admin`, `ConnectionCreatorWithResharing`, `ConnectionCreator`.
 - **`Get-FabricItemConnection`** (new): lists the connections an item depends on via
   `GET /workspaces/{workspaceId}/items/{itemId}/connections` (List Item Connections;
   auto-paginated). Enriches with `WorkspaceName` and `GatewayName` (when gateway-bound),

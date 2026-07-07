@@ -22087,6 +22087,1091 @@ function Update-FabricFolder {
     }
 }
 #EndRegion '.\Public\Folder\Update-FabricFolder.ps1' 104
+#Region '.\Public\Gateway\Add-FabricGatewayRoleAssignment.ps1' -1
+
+<#
+.SYNOPSIS
+    Assigns a role to a principal on a Fabric gateway.
+
+.DESCRIPTION
+    The Add-FabricGatewayRoleAssignment function assigns a gateway role (Admin,
+    ConnectionCreatorWithResharing, ConnectionCreator) to a principal (User, Group,
+    ServicePrincipal, ServicePrincipalProfile) by sending a POST request to
+    `/gateways/{gatewayId}/roleAssignments`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway. Mandatory.
+
+.PARAMETER PrincipalId
+    The unique identifier of the principal to assign the role to. Mandatory.
+
+.PARAMETER PrincipalType
+    The type of principal. Valid values: Group, ServicePrincipal, ServicePrincipalProfile, User.
+
+.PARAMETER GatewayRole
+    The role to assign. Valid values: Admin, ConnectionCreatorWithResharing, ConnectionCreator.
+
+.EXAMPLE
+    Add-FabricGatewayRoleAssignment -GatewayId $gw -PrincipalId $userId -PrincipalType User -GatewayRole Admin
+
+    Grants the Admin role on the gateway to the specified user.
+
+.OUTPUTS
+    System.Object
+    The created role assignment object returned by the API.
+
+.NOTES
+    - API Endpoint: POST /gateways/{gatewayId}/roleAssignments
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Add-FabricGatewayRoleAssignment {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$PrincipalId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Group', 'ServicePrincipal', 'ServicePrincipalProfile', 'User')]
+        [string]$PrincipalType,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Admin', 'ConnectionCreatorWithResharing', 'ConnectionCreator')]
+        [string]$GatewayRole
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId -Subresource 'roleAssignments'
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                principal = @{
+                    id   = $PrincipalId
+                    type = $PrincipalType
+                }
+                role      = $GatewayRole
+            }
+
+            $bodyJson = Convert-FabricRequestBody -InputObject $body
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Gateway '$GatewayId'", "Assign role '$GatewayRole' to principal '$PrincipalId'")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Role '$GatewayRole' assigned to principal '$PrincipalId' successfully on gateway '$GatewayId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to assign gateway role. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\Add-FabricGatewayRoleAssignment.ps1' 94
+#Region '.\Public\Gateway\Get-FabricGateway.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists Fabric gateways or retrieves a single gateway by id.
+
+.DESCRIPTION
+    The Get-FabricGateway function retrieves gateways from the Fabric tenant via
+    `GET /gateways`, or a single gateway via `GET /gateways/{gatewayId}` when -GatewayId is
+    supplied. Results are auto-paginated.
+
+    By default each gateway is enriched with a resolved CapacityName (for virtual network
+    gateways bound to a capacity) and decorated for the custom table view. Pass -Raw to return
+    the untouched API response.
+
+.PARAMETER GatewayId
+    The unique identifier of a gateway to retrieve. When omitted, all gateways are listed.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricGateway
+
+    Lists every gateway in the tenant.
+
+.EXAMPLE
+    Get-FabricGateway -GatewayId "12345678-1234-1234-1234-123456789012"
+
+    Retrieves the single gateway with the specified id.
+
+.OUTPUTS
+    System.Object
+    Gateway object(s) with all API-returned properties (id, type, displayName, capacityId,
+    virtualNetworkAzureResource, publicKey, version, loadBalancingSetting, etc.) plus a resolved
+    CapacityName when enriched.
+
+.NOTES
+    - API Endpoint: GET /gateways and GET /gateways/{gatewayId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricGateway {
+    [CmdletBinding()]
+    param (
+        [Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$GatewayId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = if ($GatewayId) {
+                New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId
+            }
+            else {
+                New-FabricAPIUri -Resource 'gateways'
+            }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No gateways found." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            foreach ($gateway in $response) {
+                # Resolve the capacity display name for capacity-bound (virtual network) gateways.
+                if ($gateway.capacityId) {
+                    $capacityName = $gateway.capacityId
+                    try { $capacityName = Resolve-FabricCapacityName -CapacityId $gateway.capacityId }
+                    catch {
+                        Write-FabricLog -Message "Failed to resolve capacity name for ID '$($gateway.capacityId)': $($_.Exception.Message)" -Level Debug
+                    }
+                    $gateway | Add-Member -NotePropertyName 'CapacityName' -NotePropertyValue $capacityName -Force
+                }
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.Gateway'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve gateway(s). Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\Get-FabricGateway.ps1' 103
+#Region '.\Public\Gateway\Get-FabricGatewayMember.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists the member gateways of a Fabric gateway cluster.
+
+.DESCRIPTION
+    The Get-FabricGatewayMember function retrieves the members of a gateway via
+    `GET /gateways/{gatewayId}/members`. Results are auto-paginated.
+
+    By default each member is enriched with the owning GatewayId / resolved GatewayName and
+    decorated for the custom table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway whose members are listed. Mandatory. Binds from the
+    pipeline by property name via the 'id' alias (e.g. from Get-FabricGateway output).
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricGatewayMember -GatewayId "12345678-1234-1234-1234-123456789012"
+
+    Lists the member gateways of the specified gateway cluster.
+
+.OUTPUTS
+    System.Object
+    Member object(s) with all API-returned properties (id, displayName, publicKey, version,
+    enabled) plus the owning GatewayId / GatewayName when enriched.
+
+.NOTES
+    - API Endpoint: GET /gateways/{gatewayId}/members
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricGatewayMember {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$GatewayId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId -Subresource 'members'
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No members found for gateway '$GatewayId'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $gatewayName = $GatewayId
+            try { $gatewayName = Resolve-FabricGatewayName -GatewayId $GatewayId }
+            catch {
+                Write-FabricLog -Message "Failed to resolve gateway name for ID '$GatewayId': $($_.Exception.Message)" -Level Debug
+            }
+
+            foreach ($member in $response) {
+                $member | Add-Member -NotePropertyName 'GatewayId'   -NotePropertyValue $GatewayId   -Force
+                $member | Add-Member -NotePropertyName 'GatewayName' -NotePropertyValue $gatewayName -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.GatewayMember'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve members for gateway '$GatewayId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\Get-FabricGatewayMember.ps1' 90
+#Region '.\Public\Gateway\Get-FabricGatewayRoleAssignment.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists role assignments on a Fabric gateway, or retrieves a single one by id.
+
+.DESCRIPTION
+    The Get-FabricGatewayRoleAssignment function retrieves the role assignments of a gateway via
+    `GET /gateways/{gatewayId}/roleAssignments`, or a single assignment via
+    `GET /gateways/{gatewayId}/roleAssignments/{gatewayRoleAssignmentId}` when
+    the -GatewayRoleAssignmentId parameter is supplied. Results are auto-paginated.
+
+    By default each assignment is enriched with the owning GatewayId / resolved GatewayName and
+    decorated for the custom table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway whose role assignments are listed. Mandatory. Binds from
+    the pipeline by property name via the 'id' alias.
+
+.PARAMETER GatewayRoleAssignmentId
+    The unique identifier of a single role assignment to retrieve. When omitted, all assignments
+    are listed.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricGatewayRoleAssignment -GatewayId "12345678-1234-1234-1234-123456789012"
+
+    Lists all role assignments on the specified gateway.
+
+.EXAMPLE
+    Get-FabricGatewayRoleAssignment -GatewayId $gw -GatewayRoleAssignmentId $ra
+
+    Retrieves the single role assignment with the specified id.
+
+.OUTPUTS
+    System.Object
+    Role assignment object(s) with all API-returned properties (id, principal, role) plus the
+    owning GatewayId / GatewayName when enriched.
+
+.NOTES
+    - API Endpoint: GET /gateways/{gatewayId}/roleAssignments and .../{gatewayRoleAssignmentId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricGatewayRoleAssignment {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$GatewayId,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayRoleAssignmentId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = if ($GatewayRoleAssignmentId) {
+                New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId -Subresource 'roleAssignments' -ItemId $GatewayRoleAssignmentId
+            }
+            else {
+                New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId -Subresource 'roleAssignments'
+            }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No role assignments found for gateway '$GatewayId'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $gatewayName = $GatewayId
+            try { $gatewayName = Resolve-FabricGatewayName -GatewayId $GatewayId }
+            catch {
+                Write-FabricLog -Message "Failed to resolve gateway name for ID '$GatewayId': $($_.Exception.Message)" -Level Debug
+            }
+
+            foreach ($assignment in $response) {
+                $assignment | Add-Member -NotePropertyName 'GatewayId'   -NotePropertyValue $GatewayId   -Force
+                $assignment | Add-Member -NotePropertyName 'GatewayName' -NotePropertyValue $gatewayName -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.GatewayRoleAssignment'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve role assignments for gateway '$GatewayId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\Get-FabricGatewayRoleAssignment.ps1' 110
+#Region '.\Public\Gateway\New-FabricGateway.ps1' -1
+
+<#
+.SYNOPSIS
+    Creates a new virtual network Fabric gateway.
+
+.DESCRIPTION
+    The New-FabricGateway function creates a virtual network gateway via `POST /gateways`.
+    Virtual network is the only gateway type that can be created through the API (on-premises
+    gateways are installed on a host and registered separately).
+
+    The newly created gateway is returned enriched with a resolved CapacityName and decorated for
+    the custom table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER DisplayName
+    The display name for the new gateway. Mandatory.
+
+.PARAMETER CapacityId
+    The unique identifier of the Fabric capacity the gateway is bound to. Mandatory.
+
+.PARAMETER VirtualNetworkAzureResource
+    A hashtable describing the Azure virtual network the gateway is deployed into. Mandatory.
+    Expected keys: virtualNetworkName, subnetName, subscriptionId, resourceGroupName.
+
+.PARAMETER InactivityMinutesBeforeSleep
+    The number of idle minutes before the gateway goes to sleep. Mandatory. Valid Fabric values
+    include 30, 60, 90, 120, 150, 240, 360, 480, 720, 1440.
+
+.PARAMETER NumberOfMemberGateways
+    The number of member gateways in the virtual network gateway cluster (1-7). Mandatory.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    $vnet = @{
+        virtualNetworkName = 'my-vnet'
+        subnetName         = 'fabric-subnet'
+        subscriptionId     = '00000000-0000-0000-0000-000000000000'
+        resourceGroupName  = 'my-rg'
+    }
+    New-FabricGateway -DisplayName 'VNet GW' -CapacityId $capId -VirtualNetworkAzureResource $vnet -InactivityMinutesBeforeSleep 30 -NumberOfMemberGateways 1
+
+    Creates a virtual network gateway bound to the specified capacity.
+
+.OUTPUTS
+    System.Object
+    The created gateway object with all API-returned properties plus a resolved CapacityName.
+
+.NOTES
+    - API Endpoint: POST /gateways
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function New-FabricGateway {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DisplayName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$CapacityId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable]$VirtualNetworkAzureResource,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [int]$InactivityMinutesBeforeSleep,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateRange(1, 7)]
+        [int]$NumberOfMemberGateways,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Resource 'gateways'
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                type                         = 'VirtualNetwork'
+                displayName                  = $DisplayName
+                capacityId                   = $CapacityId
+                virtualNetworkAzureResource  = $VirtualNetworkAzureResource
+                inactivityMinutesBeforeSleep = $InactivityMinutesBeforeSleep
+                numberOfMemberGateways       = $NumberOfMemberGateways
+            }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess($DisplayName, "Create Fabric virtual network gateway")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+
+                if (-not $response) {
+                    Write-FabricLog -Message "No response returned after creating gateway '$DisplayName'." -Level Warning
+                    return $null
+                }
+
+                if ($Raw) {
+                    return $response
+                }
+
+                if ($response.capacityId) {
+                    $capacityName = $response.capacityId
+                    try { $capacityName = Resolve-FabricCapacityName -CapacityId $response.capacityId }
+                    catch { $capacityName = $response.capacityId }
+                    $response | Add-Member -NotePropertyName 'CapacityName' -NotePropertyValue $capacityName -Force
+                }
+
+                $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.Gateway'
+                Write-FabricLog -Message "Gateway '$DisplayName' created successfully!" -Level Host
+                return $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to create gateway '$DisplayName'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\New-FabricGateway.ps1' 137
+#Region '.\Public\Gateway\Remove-FabricGateway.ps1' -1
+
+<#
+.SYNOPSIS
+    Removes a Fabric gateway.
+
+.DESCRIPTION
+    The Remove-FabricGateway function deletes a gateway via `DELETE /gateways/{gatewayId}`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway to remove. Mandatory. Binds from the pipeline by value or
+    property name (e.g. from Get-FabricGateway output).
+
+.EXAMPLE
+    Remove-FabricGateway -GatewayId "12345678-1234-1234-1234-123456789012"
+
+    Deletes the specified gateway.
+
+.EXAMPLE
+    Get-FabricGateway | Where-Object displayName -like 'Test*' | Remove-FabricGateway -Confirm:$false
+
+    Deletes every gateway whose name starts with 'Test'.
+
+.OUTPUTS
+    None.
+
+.NOTES
+    - API Endpoint: DELETE /gateways/{gatewayId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricGateway {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$GatewayId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            if ($PSCmdlet.ShouldProcess("Gateway '$GatewayId'", "Delete")) {
+                $apiParams = @{
+                    BaseURI = $apiEndpointURI
+                    Headers = $script:FabricAuthContext.FabricHeaders
+                    Method  = 'Delete'
+                }
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Gateway '$GatewayId' removed successfully." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to remove gateway '$GatewayId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\Remove-FabricGateway.ps1' 64
+#Region '.\Public\Gateway\Remove-FabricGatewayMember.ps1' -1
+
+<#
+.SYNOPSIS
+    Removes a member gateway from a Fabric gateway cluster.
+
+.DESCRIPTION
+    The Remove-FabricGatewayMember function deletes a gateway member via
+    `DELETE /gateways/{gatewayId}/members/{gatewayMemberId}`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway that owns the member. Mandatory.
+
+.PARAMETER GatewayMemberId
+    The unique identifier of the member gateway to remove. Mandatory. Binds from the pipeline by
+    property name via the 'id' alias.
+
+.EXAMPLE
+    Remove-FabricGatewayMember -GatewayId $gw -GatewayMemberId $member
+
+    Removes the specified member gateway from the cluster.
+
+.OUTPUTS
+    None.
+
+.NOTES
+    - API Endpoint: DELETE /gateways/{gatewayId}/members/{gatewayMemberId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricGatewayMember {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$GatewayMemberId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId -Subresource 'members' -ItemId $GatewayMemberId
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            if ($PSCmdlet.ShouldProcess("Member '$GatewayMemberId' on gateway '$GatewayId'", "Delete")) {
+                $apiParams = @{
+                    BaseURI = $apiEndpointURI
+                    Headers = $script:FabricAuthContext.FabricHeaders
+                    Method  = 'Delete'
+                }
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Gateway member '$GatewayMemberId' removed successfully from gateway '$GatewayId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to remove gateway member '$GatewayMemberId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\Remove-FabricGatewayMember.ps1' 67
+#Region '.\Public\Gateway\Remove-FabricGatewayRoleAssignment.ps1' -1
+
+<#
+.SYNOPSIS
+    Removes a role assignment from a Fabric gateway.
+
+.DESCRIPTION
+    The Remove-FabricGatewayRoleAssignment function deletes a gateway role assignment via
+    `DELETE /gateways/{gatewayId}/roleAssignments/{gatewayRoleAssignmentId}`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway. Mandatory.
+
+.PARAMETER GatewayRoleAssignmentId
+    The unique identifier of the role assignment to remove. Mandatory. Binds from the pipeline by
+    property name via the 'id' alias.
+
+.EXAMPLE
+    Remove-FabricGatewayRoleAssignment -GatewayId $gw -GatewayRoleAssignmentId $ra
+
+    Removes the specified role assignment from the gateway.
+
+.OUTPUTS
+    None.
+
+.NOTES
+    - API Endpoint: DELETE /gateways/{gatewayId}/roleAssignments/{gatewayRoleAssignmentId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricGatewayRoleAssignment {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$GatewayRoleAssignmentId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId -Subresource 'roleAssignments' -ItemId $GatewayRoleAssignmentId
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            if ($PSCmdlet.ShouldProcess("Role assignment '$GatewayRoleAssignmentId' on gateway '$GatewayId'", "Delete")) {
+                $apiParams = @{
+                    BaseURI = $apiEndpointURI
+                    Headers = $script:FabricAuthContext.FabricHeaders
+                    Method  = 'Delete'
+                }
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Role assignment '$GatewayRoleAssignmentId' removed successfully from gateway '$GatewayId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to remove gateway role assignment '$GatewayRoleAssignmentId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\Remove-FabricGatewayRoleAssignment.ps1' 67
+#Region '.\Public\Gateway\Update-FabricGateway.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates an existing Fabric gateway.
+
+.DESCRIPTION
+    The Update-FabricGateway function updates a gateway via `PATCH /gateways/{gatewayId}`. The
+    request is a discriminated union keyed on gateway -Type: virtual network gateways accept
+    CapacityId / InactivityMinutesBeforeSleep / NumberOfMemberGateways, while on-premises gateways
+    accept LoadBalancingSetting / AllowCloudConnectionRefresh / AllowCustomConnectors. Only the
+    parameters you supply are sent.
+
+    The updated gateway is returned enriched and decorated for the custom table view; pass -Raw for
+    the untouched API response.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway to update. Mandatory.
+
+.PARAMETER Type
+    The gateway type: VirtualNetwork or OnPremises. Mandatory (drives which properties are valid).
+
+.PARAMETER DisplayName
+    The new display name for the gateway.
+
+.PARAMETER CapacityId
+    (VirtualNetwork) The capacity the gateway is bound to.
+
+.PARAMETER InactivityMinutesBeforeSleep
+    (VirtualNetwork) Idle minutes before the gateway sleeps.
+
+.PARAMETER NumberOfMemberGateways
+    (VirtualNetwork) Number of member gateways in the cluster (1-7).
+
+.PARAMETER LoadBalancingSetting
+    (OnPremises) Load balancing mode: Failover or DistributeEvenly.
+
+.PARAMETER AllowCloudConnectionRefresh
+    (OnPremises) Whether cloud connection refresh is allowed.
+
+.PARAMETER AllowCustomConnectors
+    (OnPremises) Whether custom connectors are allowed.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Update-FabricGateway -GatewayId $id -Type VirtualNetwork -NumberOfMemberGateways 3
+
+    Scales a virtual network gateway to three member gateways.
+
+.EXAMPLE
+    Update-FabricGateway -GatewayId $id -Type OnPremises -LoadBalancingSetting DistributeEvenly
+
+    Switches an on-premises gateway cluster to even load distribution.
+
+.OUTPUTS
+    System.Object
+    The updated gateway object with all API-returned properties plus a resolved CapacityName.
+
+.NOTES
+    - API Endpoint: PATCH /gateways/{gatewayId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricGateway {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('VirtualNetwork', 'OnPremises')]
+        [string]$Type,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$DisplayName,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$CapacityId,
+
+        [Parameter()]
+        [int]$InactivityMinutesBeforeSleep,
+
+        [Parameter()]
+        [ValidateRange(1, 7)]
+        [int]$NumberOfMemberGateways,
+
+        [Parameter()]
+        [ValidateSet('Failover', 'DistributeEvenly')]
+        [string]$LoadBalancingSetting,
+
+        [Parameter()]
+        [bool]$AllowCloudConnectionRefresh,
+
+        [Parameter()]
+        [bool]$AllowCustomConnectors,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ type = $Type }
+            if ($PSBoundParameters.ContainsKey('DisplayName')) { $body.displayName = $DisplayName }
+            if ($PSBoundParameters.ContainsKey('CapacityId')) { $body.capacityId = $CapacityId }
+            if ($PSBoundParameters.ContainsKey('InactivityMinutesBeforeSleep')) { $body.inactivityMinutesBeforeSleep = $InactivityMinutesBeforeSleep }
+            if ($PSBoundParameters.ContainsKey('NumberOfMemberGateways')) { $body.numberOfMemberGateways = $NumberOfMemberGateways }
+            if ($PSBoundParameters.ContainsKey('LoadBalancingSetting')) { $body.loadBalancingSetting = $LoadBalancingSetting }
+            if ($PSBoundParameters.ContainsKey('AllowCloudConnectionRefresh')) { $body.allowCloudConnectionRefresh = $AllowCloudConnectionRefresh }
+            if ($PSBoundParameters.ContainsKey('AllowCustomConnectors')) { $body.allowCustomConnectors = $AllowCustomConnectors }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Patch'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Gateway '$GatewayId'", "Update gateway")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+
+                if (-not $response) {
+                    Write-FabricLog -Message "No response returned after updating gateway '$GatewayId'." -Level Warning
+                    return $null
+                }
+
+                if ($Raw) {
+                    return $response
+                }
+
+                if ($response.capacityId) {
+                    $capacityName = $response.capacityId
+                    try { $capacityName = Resolve-FabricCapacityName -CapacityId $response.capacityId }
+                    catch { $capacityName = $response.capacityId }
+                    $response | Add-Member -NotePropertyName 'CapacityName' -NotePropertyValue $capacityName -Force
+                }
+
+                $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.Gateway'
+                Write-FabricLog -Message "Gateway '$GatewayId' updated successfully!" -Level Host
+                return $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update gateway '$GatewayId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\Update-FabricGateway.ps1' 162
+#Region '.\Public\Gateway\Update-FabricGatewayMember.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates a member gateway within a Fabric gateway cluster.
+
+.DESCRIPTION
+    The Update-FabricGatewayMember function updates a gateway member via
+    `PATCH /gateways/{gatewayId}/members/{gatewayMemberId}`. Only the supplied properties are sent.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway that owns the member. Mandatory.
+
+.PARAMETER GatewayMemberId
+    The unique identifier of the member gateway to update. Mandatory. Binds from the pipeline by
+    property name via the 'id' alias.
+
+.PARAMETER DisplayName
+    The new display name for the member gateway.
+
+.PARAMETER Enabled
+    Whether the member gateway is enabled.
+
+.EXAMPLE
+    Update-FabricGatewayMember -GatewayId $gw -GatewayMemberId $member -Enabled $false
+
+    Disables the specified member gateway.
+
+.OUTPUTS
+    System.Object
+    The updated member object returned by the API.
+
+.NOTES
+    - API Endpoint: PATCH /gateways/{gatewayId}/members/{gatewayMemberId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricGatewayMember {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$GatewayMemberId,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$DisplayName,
+
+        [Parameter()]
+        [bool]$Enabled
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId -Subresource 'members' -ItemId $GatewayMemberId
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{}
+            if ($PSBoundParameters.ContainsKey('DisplayName')) { $body.displayName = $DisplayName }
+            if ($PSBoundParameters.ContainsKey('Enabled')) { $body.enabled = $Enabled }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Patch'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Member '$GatewayMemberId' on gateway '$GatewayId'", "Update gateway member")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Gateway member '$GatewayMemberId' updated successfully in gateway '$GatewayId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update gateway member '$GatewayMemberId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\Update-FabricGatewayMember.ps1' 90
+#Region '.\Public\Gateway\Update-FabricGatewayRoleAssignment.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates the role assigned to a principal on a Fabric gateway.
+
+.DESCRIPTION
+    The Update-FabricGatewayRoleAssignment function updates an existing gateway role assignment via
+    `PATCH /gateways/{gatewayId}/roleAssignments/{gatewayRoleAssignmentId}`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway. Mandatory.
+
+.PARAMETER GatewayRoleAssignmentId
+    The unique identifier of the role assignment to update. Mandatory.
+
+.PARAMETER GatewayRole
+    The new role to assign. Valid values: Admin, ConnectionCreatorWithResharing, ConnectionCreator.
+
+.EXAMPLE
+    Update-FabricGatewayRoleAssignment -GatewayId $gw -GatewayRoleAssignmentId $ra -GatewayRole ConnectionCreator
+
+    Changes the specified role assignment to the ConnectionCreator role.
+
+.OUTPUTS
+    System.Object
+    The updated role assignment object returned by the API.
+
+.NOTES
+    - API Endpoint: PATCH /gateways/{gatewayId}/roleAssignments/{gatewayRoleAssignmentId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricGatewayRoleAssignment {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$GatewayRoleAssignmentId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Admin', 'ConnectionCreatorWithResharing', 'ConnectionCreator')]
+        [string]$GatewayRole
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Resource 'gateways' -ResourceId $GatewayId -Subresource 'roleAssignments' -ItemId $GatewayRoleAssignmentId
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ role = $GatewayRole }
+            $bodyJson = Convert-FabricRequestBody -InputObject $body
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Patch'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Role assignment '$GatewayRoleAssignmentId' on gateway '$GatewayId'", "Update role to '$GatewayRole'")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Role assignment '$GatewayRoleAssignmentId' updated successfully on gateway '$GatewayId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update gateway role assignment. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Gateway\Update-FabricGatewayRoleAssignment.ps1' 79
 #Region '.\Public\Git\Connect-FabricWorkspaceGit.ps1' -1
 
 <#
