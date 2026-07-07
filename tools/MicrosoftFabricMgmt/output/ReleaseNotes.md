@@ -2,6 +2,11 @@
 
 ### Added
 
+- **`Get-FabricItemConnection`** (new): lists the connections an item depends on via
+  `GET /workspaces/{workspaceId}/items/{itemId}/connections` (List Item Connections;
+  auto-paginated). Enriches with `WorkspaceName` and `GatewayName` (when gateway-bound),
+  decorates as `MicrosoftFabric.Connection`, and honors `-Raw`. `ItemId` binds from the
+  pipeline (e.g. `Get-FabricDataPipeline | Get-FabricItemConnection -WorkspaceId $ws`).
 - **Workspace networking commands** (8 new) filling the remaining platform networking gap
   (all preview, under `/workspaces/{workspaceId}/networking/communicationPolicy/...`):
   `Get/Set-FabricWorkspaceNetworkCommunicationPolicy` (full policy; PUT supports optimistic
