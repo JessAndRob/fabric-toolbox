@@ -17059,6 +17059,94 @@ function Get-FabricEnvironment {
     }
 }
 #EndRegion '.\Public\Environment\Get-FabricEnvironment.ps1' 97
+#Region '.\Public\Environment\Get-FabricEnvironmentDefinition.ps1' -1
+
+<#
+.SYNOPSIS
+    Retrieves the definition of a Fabric environment.
+
+.DESCRIPTION
+    The Get-FabricEnvironmentDefinition function retrieves an environment's definition via
+    `POST /workspaces/{workspaceId}/environments/{environmentId}/getDefinition`. The call is
+    long-running; the module transparently waits for and returns the completed definition.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the environment. Mandatory.
+
+.PARAMETER EnvironmentId
+    The unique identifier of the environment whose definition is retrieved. Mandatory. Binds from
+    the pipeline via the 'id' alias.
+
+.PARAMETER Format
+    Optional definition format to request.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    Get-FabricEnvironmentDefinition -WorkspaceId $ws -EnvironmentId $env
+
+    Retrieves the environment definition.
+
+.OUTPUTS
+    System.Object
+    The environment definition (format plus base64-encoded parts).
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/environments/{environmentId}/getDefinition
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricEnvironmentDefinition {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$EnvironmentId,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$Format,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $queryParams = if ($Format) { @{ format = $Format } } else { $null }
+            $apiEndpointURI = New-FabricAPIUri -Resource 'workspaces' -WorkspaceId $WorkspaceId -Subresource "environments/$EnvironmentId/getDefinition" -QueryParameters $queryParams
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if ($Raw) {
+                return $response
+            }
+
+            Write-FabricLog -Message "Definition for environment '$EnvironmentId' retrieved successfully." -Level Debug
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve definition for environment '$EnvironmentId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Environment\Get-FabricEnvironmentDefinition.ps1' 86
 #Region '.\Public\Environment\Get-FabricEnvironmentLibrary.ps1' -1
 
 <#
@@ -18070,6 +18158,99 @@ function Update-FabricEnvironment {
     }
 }
 #EndRegion '.\Public\Environment\Update-FabricEnvironment.ps1' 110
+#Region '.\Public\Environment\Update-FabricEnvironmentDefinition.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates the definition of a Fabric environment.
+
+.DESCRIPTION
+    The Update-FabricEnvironmentDefinition function replaces an environment's definition via
+    `POST /workspaces/{workspaceId}/environments/{environmentId}/updateDefinition`. The call is
+    long-running; the module transparently waits for completion.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the environment. Mandatory.
+
+.PARAMETER EnvironmentId
+    The unique identifier of the environment to update. Mandatory. Binds from the pipeline via the
+    'id' alias.
+
+.PARAMETER Definition
+    The environment definition hashtable to apply, with an optional 'format' and a 'parts' array of
+    @{ path; payload; payloadType }. Mandatory.
+
+.PARAMETER UpdateMetadata
+    If specified, instructs Fabric to also update item metadata from the supplied definition.
+
+.EXAMPLE
+    $def = @{ parts = @(@{ path = 'Setting/Sparkcompute.yml'; payload = $b64; payloadType = 'InlineBase64' }) }
+    Update-FabricEnvironmentDefinition -WorkspaceId $ws -EnvironmentId $env -Definition $def
+
+    Replaces the environment definition with the supplied parts.
+
+.OUTPUTS
+    System.Object
+    The API response (or completed long-running operation result).
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/environments/{environmentId}/updateDefinition
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricEnvironmentDefinition {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$EnvironmentId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable]$Definition,
+
+        [Parameter()]
+        [switch]$UpdateMetadata
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $queryParams = if ($UpdateMetadata) { @{ updateMetadata = 'true' } } else { $null }
+            $apiEndpointURI = New-FabricAPIUri -Resource 'workspaces' -WorkspaceId $WorkspaceId -Subresource "environments/$EnvironmentId/updateDefinition" -QueryParameters $queryParams
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ definition = $Definition }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Environment '$EnvironmentId'", "Update environment definition")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Definition for environment '$EnvironmentId' updated successfully." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update definition for environment '$EnvironmentId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Environment\Update-FabricEnvironmentDefinition.ps1' 91
 #Region '.\Public\Environment\Update-FabricEnvironmentStagingSparkCompute.ps1' -1
 
 <#
@@ -30966,6 +31147,94 @@ function Get-FabricLakehouse {
     }
 }
 #EndRegion '.\Public\Lakehouse\Get-FabricLakehouse.ps1' 104
+#Region '.\Public\Lakehouse\Get-FabricLakehouseDefinition.ps1' -1
+
+<#
+.SYNOPSIS
+    Retrieves the definition of a Fabric lakehouse.
+
+.DESCRIPTION
+    The Get-FabricLakehouseDefinition function retrieves a lakehouse's definition via
+    `POST /workspaces/{workspaceId}/lakehouses/{lakehouseId}/getDefinition`. The call is
+    long-running; the module transparently waits for and returns the completed definition.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the lakehouse. Mandatory.
+
+.PARAMETER LakehouseId
+    The unique identifier of the lakehouse whose definition is retrieved. Mandatory. Binds from the
+    pipeline via the 'id' alias.
+
+.PARAMETER Format
+    Optional definition format to request.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    Get-FabricLakehouseDefinition -WorkspaceId $ws -LakehouseId $lh
+
+    Retrieves the lakehouse definition.
+
+.OUTPUTS
+    System.Object
+    The lakehouse definition (format plus base64-encoded parts).
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/lakehouses/{lakehouseId}/getDefinition
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricLakehouseDefinition {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$LakehouseId,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$Format,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $queryParams = if ($Format) { @{ format = $Format } } else { $null }
+            $apiEndpointURI = New-FabricAPIUri -Resource 'workspaces' -WorkspaceId $WorkspaceId -Subresource "lakehouses/$LakehouseId/getDefinition" -QueryParameters $queryParams
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if ($Raw) {
+                return $response
+            }
+
+            Write-FabricLog -Message "Definition for lakehouse '$LakehouseId' retrieved successfully." -Level Debug
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve definition for lakehouse '$LakehouseId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Lakehouse\Get-FabricLakehouseDefinition.ps1' 86
 #Region '.\Public\Lakehouse\Get-FabricLakehouseLivySession.ps1' -1
 
 <#
@@ -31810,6 +32079,99 @@ function Update-FabricLakehouse {
     }
 }
 #EndRegion '.\Public\Lakehouse\Update-FabricLakehouse.ps1' 111
+#Region '.\Public\Lakehouse\Update-FabricLakehouseDefinition.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates the definition of a Fabric lakehouse.
+
+.DESCRIPTION
+    The Update-FabricLakehouseDefinition function replaces a lakehouse's definition via
+    `POST /workspaces/{workspaceId}/lakehouses/{lakehouseId}/updateDefinition`. The call is
+    long-running; the module transparently waits for completion.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the lakehouse. Mandatory.
+
+.PARAMETER LakehouseId
+    The unique identifier of the lakehouse to update. Mandatory. Binds from the pipeline via the
+    'id' alias.
+
+.PARAMETER Definition
+    The lakehouse definition hashtable to apply, with an optional 'format' and a 'parts' array of
+    @{ path; payload; payloadType }. Mandatory.
+
+.PARAMETER UpdateMetadata
+    If specified, instructs Fabric to also update item metadata from the supplied definition.
+
+.EXAMPLE
+    $def = @{ parts = @(@{ path = 'lakehouse.metadata.json'; payload = $b64; payloadType = 'InlineBase64' }) }
+    Update-FabricLakehouseDefinition -WorkspaceId $ws -LakehouseId $lh -Definition $def
+
+    Replaces the lakehouse definition with the supplied parts.
+
+.OUTPUTS
+    System.Object
+    The API response (or completed long-running operation result).
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/lakehouses/{lakehouseId}/updateDefinition
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricLakehouseDefinition {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$LakehouseId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable]$Definition,
+
+        [Parameter()]
+        [switch]$UpdateMetadata
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $queryParams = if ($UpdateMetadata) { @{ updateMetadata = 'true' } } else { $null }
+            $apiEndpointURI = New-FabricAPIUri -Resource 'workspaces' -WorkspaceId $WorkspaceId -Subresource "lakehouses/$LakehouseId/updateDefinition" -QueryParameters $queryParams
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ definition = $Definition }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Lakehouse '$LakehouseId'", "Update lakehouse definition")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Definition for lakehouse '$LakehouseId' updated successfully." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update definition for lakehouse '$LakehouseId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Lakehouse\Update-FabricLakehouseDefinition.ps1' 91
 #Region '.\Public\Lakehouse\Write-FabricLakehouseTableData.ps1' -1
 
 <#
@@ -46425,6 +46787,187 @@ function Get-FabricSQLEndpointConnectionString {
     }
 }
 #EndRegion '.\Public\SQL Endpoints\Get-FabricSQLEndpointConnectionString.ps1' 123
+#Region '.\Public\SQL Endpoints\Get-FabricSQLEndpointSqlAudit.ps1' -1
+
+<#
+.SYNOPSIS
+    Retrieves the SQL audit settings of a Fabric SQL endpoint.
+
+.DESCRIPTION
+    The Get-FabricSQLEndpointSqlAudit function retrieves the SQL audit settings of a SQL endpoint via
+    `GET /workspaces/{workspaceId}/sqlEndpoints/{itemId}/settings/sqlAudit`, including the audit
+    state, retention, and the configured audit actions and groups.
+
+    By default the result is enriched with a resolved WorkspaceName and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the SQL endpoint. Mandatory.
+
+.PARAMETER SQLEndpointId
+    The unique identifier of the SQL endpoint. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricSQLEndpointSqlAudit -WorkspaceId $ws -SQLEndpointId $ep
+
+    Returns the SQL audit settings for the SQL endpoint.
+
+.OUTPUTS
+    System.Object
+    The SQL audit settings object (state, retentionDays, auditActionsAndGroups) plus a resolved
+    WorkspaceName when enriched.
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/sqlEndpoints/{itemId}/settings/sqlAudit
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricSQLEndpointSqlAudit {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$SQLEndpointId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'sqlEndpoints', $SQLEndpointId, 'settings', 'sqlAudit')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No SQL audit settings found for SQL endpoint '$SQLEndpointId'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $workspaceName = $WorkspaceId
+            try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+            catch { $workspaceName = $WorkspaceId }
+
+            foreach ($setting in $response) {
+                $setting | Add-Member -NotePropertyName 'workspaceId'   -NotePropertyValue $WorkspaceId   -Force
+                $setting | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.SqlAuditSettings'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve SQL audit settings for SQL endpoint '$SQLEndpointId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\SQL Endpoints\Get-FabricSQLEndpointSqlAudit.ps1' 95
+#Region '.\Public\SQL Endpoints\Set-FabricSQLEndpointSqlAuditActionsAndGroups.ps1' -1
+
+<#
+.SYNOPSIS
+    Sets the audited actions and groups for a Fabric SQL endpoint.
+
+.DESCRIPTION
+    The Set-FabricSQLEndpointSqlAuditActionsAndGroups function replaces the set of audited actions
+    and action groups for a SQL endpoint via
+    `POST /workspaces/{workspaceId}/sqlEndpoints/{itemId}/settings/sqlAudit/setAuditActionsAndGroups`.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the SQL endpoint. Mandatory.
+
+.PARAMETER SQLEndpointId
+    The unique identifier of the SQL endpoint. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER AuditActionsAndGroups
+    The array of audit action and action-group names to set (e.g.
+    'BATCH_COMPLETED_GROUP', 'FAILED_DATABASE_AUTHENTICATION_GROUP'). Mandatory.
+
+.EXAMPLE
+    Set-FabricSQLEndpointSqlAuditActionsAndGroups -WorkspaceId $ws -SQLEndpointId $ep -AuditActionsAndGroups 'BATCH_COMPLETED_GROUP'
+
+    Sets the SQL endpoint to audit the batch-completed group.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/sqlEndpoints/{itemId}/settings/sqlAudit/setAuditActionsAndGroups
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Set-FabricSQLEndpointSqlAuditActionsAndGroups {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$SQLEndpointId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string[]]$AuditActionsAndGroups
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'sqlEndpoints', $SQLEndpointId, 'settings', 'sqlAudit', 'setAuditActionsAndGroups')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            # The request body is a bare JSON array of action/group names.
+            $bodyJson = $AuditActionsAndGroups | ConvertTo-Json -Depth 10 -AsArray
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("SQL endpoint '$SQLEndpointId'", "Set $($AuditActionsAndGroups.Count) audit action(s)/group(s)")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "SQL audit actions and groups for SQL endpoint '$SQLEndpointId' set successfully." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to set SQL audit actions and groups for SQL endpoint '$SQLEndpointId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\SQL Endpoints\Set-FabricSQLEndpointSqlAuditActionsAndGroups.ps1' 82
 #Region '.\Public\SQL Endpoints\Update-FabricSQLEndpointMetadata.ps1' -1
 
 <#
@@ -46517,6 +47060,99 @@ function Update-FabricSQLEndpointMetadata {
     }
 }
 #EndRegion '.\Public\SQL Endpoints\Update-FabricSQLEndpointMetadata.ps1' 90
+#Region '.\Public\SQL Endpoints\Update-FabricSQLEndpointSqlAudit.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates the SQL audit settings of a Fabric SQL endpoint.
+
+.DESCRIPTION
+    The Update-FabricSQLEndpointSqlAudit function updates the SQL audit state and/or retention of a
+    SQL endpoint via `PATCH /workspaces/{workspaceId}/sqlEndpoints/{itemId}/settings/sqlAudit`. Only
+    the supplied properties are sent. To change the audited actions and groups, use
+    Set-FabricSQLEndpointSqlAuditActionsAndGroups.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the SQL endpoint. Mandatory.
+
+.PARAMETER SQLEndpointId
+    The unique identifier of the SQL endpoint. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER State
+    The audit state to set: Enabled or Disabled.
+
+.PARAMETER RetentionDays
+    The number of days to retain audit logs.
+
+.EXAMPLE
+    Update-FabricSQLEndpointSqlAudit -WorkspaceId $ws -SQLEndpointId $ep -State Enabled -RetentionDays 30
+
+    Enables SQL auditing with a 30-day retention.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: PATCH /workspaces/{workspaceId}/sqlEndpoints/{itemId}/settings/sqlAudit
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricSQLEndpointSqlAudit {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$SQLEndpointId,
+
+        [Parameter()]
+        [ValidateSet('Enabled', 'Disabled')]
+        [string]$State,
+
+        [Parameter()]
+        [int]$RetentionDays
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'sqlEndpoints', $SQLEndpointId, 'settings', 'sqlAudit')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{}
+            if ($PSBoundParameters.ContainsKey('State')) { $body.state = $State }
+            if ($PSBoundParameters.ContainsKey('RetentionDays')) { $body.retentionDays = $RetentionDays }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Patch'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("SQL endpoint '$SQLEndpointId'", "Update SQL audit settings")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "SQL audit settings for SQL endpoint '$SQLEndpointId' updated successfully." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update SQL audit settings for SQL endpoint '$SQLEndpointId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\SQL Endpoints\Update-FabricSQLEndpointSqlAudit.ps1' 91
 #Region '.\Public\Tags\Get-FabricTag.ps1' -1
 
 <#
@@ -50852,6 +51488,103 @@ function Get-FabricWarehouseSnapshot {
     }
 }
 #EndRegion '.\Public\Warehouse\Get-FabricWarehouseSnapshot.ps1' 160
+#Region '.\Public\Warehouse\Get-FabricWarehouseSqlAudit.ps1' -1
+
+<#
+.SYNOPSIS
+    Retrieves the SQL audit settings of a Fabric warehouse.
+
+.DESCRIPTION
+    The Get-FabricWarehouseSqlAudit function retrieves the SQL audit settings of a warehouse via
+    `GET /workspaces/{workspaceId}/warehouses/{itemId}/settings/sqlAudit`, including the audit state,
+    retention, and the configured audit actions and groups.
+
+    By default the result is enriched with a resolved WorkspaceName and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the warehouse. Mandatory.
+
+.PARAMETER WarehouseId
+    The unique identifier of the warehouse. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricWarehouseSqlAudit -WorkspaceId $ws -WarehouseId $wh
+
+    Returns the SQL audit settings for the warehouse.
+
+.OUTPUTS
+    System.Object
+    The SQL audit settings object (state, retentionDays, auditActionsAndGroups) plus a resolved
+    WorkspaceName when enriched.
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/warehouses/{itemId}/settings/sqlAudit
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricWarehouseSqlAudit {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WarehouseId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'warehouses', $WarehouseId, 'settings', 'sqlAudit')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No SQL audit settings found for warehouse '$WarehouseId'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $workspaceName = $WorkspaceId
+            try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+            catch { $workspaceName = $WorkspaceId }
+
+            foreach ($setting in $response) {
+                $setting | Add-Member -NotePropertyName 'workspaceId'   -NotePropertyValue $WorkspaceId   -Force
+                $setting | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.SqlAuditSettings'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve SQL audit settings for warehouse '$WarehouseId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Warehouse\Get-FabricWarehouseSqlAudit.ps1' 95
 #Region '.\Public\Warehouse\New-FabricWarehouse.ps1' -1
 
 <#
@@ -51510,6 +52243,90 @@ function Restore-FabricWarehouseToRestorePoint {
     }
 }
 #EndRegion '.\Public\Warehouse\Restore-FabricWarehouseToRestorePoint.ps1' 76
+#Region '.\Public\Warehouse\Set-FabricWarehouseSqlAuditActionsAndGroups.ps1' -1
+
+<#
+.SYNOPSIS
+    Sets the audited actions and groups for a Fabric warehouse.
+
+.DESCRIPTION
+    The Set-FabricWarehouseSqlAuditActionsAndGroups function replaces the set of audited actions and
+    action groups for a warehouse via
+    `POST /workspaces/{workspaceId}/warehouses/{itemId}/settings/sqlAudit/setAuditActionsAndGroups`.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the warehouse. Mandatory.
+
+.PARAMETER WarehouseId
+    The unique identifier of the warehouse. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER AuditActionsAndGroups
+    The array of audit action and action-group names to set (e.g.
+    'BATCH_COMPLETED_GROUP', 'FAILED_DATABASE_AUTHENTICATION_GROUP'). Mandatory.
+
+.EXAMPLE
+    Set-FabricWarehouseSqlAuditActionsAndGroups -WorkspaceId $ws -WarehouseId $wh -AuditActionsAndGroups 'BATCH_COMPLETED_GROUP'
+
+    Sets the warehouse to audit the batch-completed group.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/warehouses/{itemId}/settings/sqlAudit/setAuditActionsAndGroups
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Set-FabricWarehouseSqlAuditActionsAndGroups {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WarehouseId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string[]]$AuditActionsAndGroups
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'warehouses', $WarehouseId, 'settings', 'sqlAudit', 'setAuditActionsAndGroups')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            # The request body is a bare JSON array of action/group names.
+            $bodyJson = $AuditActionsAndGroups | ConvertTo-Json -Depth 10 -AsArray
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Warehouse '$WarehouseId'", "Set $($AuditActionsAndGroups.Count) audit action(s)/group(s)")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "SQL audit actions and groups for warehouse '$WarehouseId' set successfully." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to set SQL audit actions and groups for warehouse '$WarehouseId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Warehouse\Set-FabricWarehouseSqlAuditActionsAndGroups.ps1' 82
 #Region '.\Public\Warehouse\Update-FabricWarehouse.ps1' -1
 
 <#
@@ -51866,6 +52683,99 @@ function Update-FabricWarehouseSnapshot {
         Write-FabricLog -Message "Failed to update Warehouse Snapshot '$WarehouseSnapshotName'. Error: $errorDetails" -Level Error
     }    }}
 #EndRegion '.\Public\Warehouse\Update-FabricWarehouseSnapshot.ps1' 107
+#Region '.\Public\Warehouse\Update-FabricWarehouseSqlAudit.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates the SQL audit settings of a Fabric warehouse.
+
+.DESCRIPTION
+    The Update-FabricWarehouseSqlAudit function updates the SQL audit state and/or retention of a
+    warehouse via `PATCH /workspaces/{workspaceId}/warehouses/{itemId}/settings/sqlAudit`. Only the
+    supplied properties are sent. To change the audited actions and groups, use
+    Set-FabricWarehouseSqlAuditActionsAndGroups.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the warehouse. Mandatory.
+
+.PARAMETER WarehouseId
+    The unique identifier of the warehouse. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER State
+    The audit state to set: Enabled or Disabled.
+
+.PARAMETER RetentionDays
+    The number of days to retain audit logs.
+
+.EXAMPLE
+    Update-FabricWarehouseSqlAudit -WorkspaceId $ws -WarehouseId $wh -State Enabled -RetentionDays 30
+
+    Enables SQL auditing with a 30-day retention.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: PATCH /workspaces/{workspaceId}/warehouses/{itemId}/settings/sqlAudit
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricWarehouseSqlAudit {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WarehouseId,
+
+        [Parameter()]
+        [ValidateSet('Enabled', 'Disabled')]
+        [string]$State,
+
+        [Parameter()]
+        [int]$RetentionDays
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'warehouses', $WarehouseId, 'settings', 'sqlAudit')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{}
+            if ($PSBoundParameters.ContainsKey('State')) { $body.state = $State }
+            if ($PSBoundParameters.ContainsKey('RetentionDays')) { $body.retentionDays = $RetentionDays }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Patch'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Warehouse '$WarehouseId'", "Update SQL audit settings")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "SQL audit settings for warehouse '$WarehouseId' updated successfully." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update SQL audit settings for warehouse '$WarehouseId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Warehouse\Update-FabricWarehouseSqlAudit.ps1' 91
 #Region '.\Public\Workspace Networking\Get-FabricWorkspaceGitOutboundPolicy.ps1' -1
 
 <#

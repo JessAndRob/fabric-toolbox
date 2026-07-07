@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SQL audit commands** (6 new) for SQL endpoints and warehouses:
+  `Get-FabricSQLEndpointSqlAudit` / `Update-FabricSQLEndpointSqlAudit` /
+  `Set-FabricSQLEndpointSqlAuditActionsAndGroups` and the matching `*WarehouseSqlAudit*` trio
+  (GET/PATCH `.../settings/sqlAudit`, POST `.../setAuditActionsAndGroups`). Getters enrich with
+  `WorkspaceName` + `MicrosoftFabric.SqlAuditSettings` and honor `-Raw`; PATCH sends only the
+  supplied `State`/`RetentionDays`; the actions/groups setter posts a bare string array. Mutating
+  commands support `-WhatIf`/`-Confirm`.
+- **Lakehouse & environment definition commands** (4 new): `Get-FabricLakehouseDefinition` /
+  `Update-FabricLakehouseDefinition` and `Get-FabricEnvironmentDefinition` /
+  `Update-FabricEnvironmentDefinition` (POST .../getDefinition and .../updateDefinition,
+  long-running). Update commands take a `-Definition` hashtable (`parts` array) and support
+  `-UpdateMetadata`, `-WhatIf`/`-Confirm`; getters support `-Format` and `-Raw`.
 - **Platform coverage fills** (6 new commands): `Get-FabricConnectionRoleAssignment`
   (GET /connections/{id}/roleAssignments + by-id — completes the connection role-assignment set that
   previously had only Add/Remove/Update), `Get-FabricItemExternalDataShare` (provider-side

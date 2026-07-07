@@ -98,7 +98,39 @@ Notes:
 
 All with behavior tests + CHANGELOG (Added + Fixed).
 
-## Bucket C — Per-resource (~55)  ◐ scoping
+## Bucket C — Per-resource  ◐ in progress
+
+After a 3rd validator fix (case-insensitive `-replace`, +11) **Fabric coverage is 90.1% (494/548)**.
+The remaining-missing list is now trustworthy. Genuine gaps (false-negatives excluded):
+
+**Still-false-negatives (covered; do NOT implement):** Start-FabricLakehouseRefreshMaterializedLakeView
+(RefreshMaterializedLakeViews/instances), Start-FabricLakehouseTableMaintenance (TableMaintenance/instances),
+Start-FabricSparkJobDefinitionOnDemand (sparkjob/instances), Update-FabricVariableLibraryDefinition
+(VariableLibraries updateDefinition), Get-FabricLongRunningOperation (/operations/{id}),
+Get-FabricOneLakeShortcut (shortcuts/{path}/{name}), Get-FabricDomain (/domains → admin/domains).
+
+**Genuine C batches (~35 functions):**
+- ☑ **C1 def wrappers** — Get/Update-FabricLakehouseDefinition + Get/Update-FabricEnvironmentDefinition (4 fns) — build green
+- ☑ **C2 sqlAudit** — Get/Update-FabricSQLEndpointSqlAudit + Set-FabricSQLEndpointSqlAuditActionsAndGroups + Warehouse trio (6 fns) — build green (9023 passed)
+- ☐ **C2 sqlAudit** — sqlEndpoint + warehouse (6 ep, 6 fns). Schemas ready:
+  - GET .../settings/sqlAudit → `SqlAuditSettings` {state(Enabled|Disabled), retentionDays:int, auditActionsAndGroups:string[]}
+  - PATCH .../settings/sqlAudit → `SqlAuditSettingsUpdate` {state, retentionDays}
+  - POST .../settings/sqlAudit/setAuditActionsAndGroups → body is a bare **string[]** of action/group names
+  - Fns: Get/Update-FabricSqlEndpointSqlAudit, Set-FabricSqlEndpointSqlAuditActionsAndGroups (+ Warehouse trio)
+  - **DONE (source+tests+CHANGELOG written; combined build pending)**: Get/Update-FabricSQLEndpointSqlAudit,
+    Set-FabricSQLEndpointSqlAuditActionsAndGroups, Get/Update-FabricWarehouseSqlAudit,
+    Set-FabricWarehouseSqlAuditActionsAndGroups. Analyzer clean.
+- ☐ **C3 mirroredAzureDatabricksCatalog** — 4 fns. Scoped:
+  - GET /azuredatabricks/catalogs — query `databricksWorkspaceConnectionId` (req), continuationToken, maxResults → Get-FabricAzureDatabricksCatalog (resp DatabricksCatalogs)
+  - GET /azuredatabricks/catalogs/{catalogName}/schemas → Get-FabricAzureDatabricksSchema (resp DatabricksSchemas)
+  - GET /azuredatabricks/catalogs/{catalogName}/schemas/{schemaName}/tables → Get-FabricAzureDatabricksTable (resp DatabricksTables)
+  - POST /mirroredAzureDatabricksCatalogs/{id}/refreshCatalogMetadata → Update-FabricMirroredAzureDatabricksCatalogMetadata (verb: Update, per Update-FabricSQLEndpointMetadata precedent)
+- ☐ **C4 dataflow** — executeQuery + ApplyChanges/Execute instances&schedules (5 ep; check Start-FabricItemJob/New-FabricItemSchedule generic coverage first)
+- ☐ **C5 environment libraries** — staging library upload/import/remove/delete + export external (6 ep)
+- ☐ **C6 apacheAirflowJob (beta)** — files (GET/PUT/DELETE/list) + poolTemplates (CRUD) + settings (GET/PATCH) (10 ep)
+- ☐ **C7 lakehouse RefreshMaterializedLakeViews schedules** — POST/PATCH/DELETE schedules (3 ep; instances already exist)
+- ☐ **C8 admin** — domains roleAssignments GET, syncToSubdomains, unassignAllWorkspaces, unassignWorkspaces, capacity delegatedTenantSettingOverrides update (5 ep)
+- ☐ **C9 singles** — mlModel deactivateAll, semanticModel bindConnection, realTimeIntelligence nltokql, warehouseSnapshot PATCH (4 fns)
 ## Bucket E — Power BI Admin + Gateways (15)  ☐ (not started)
 ## Bucket F — Legacy Power BI (~216)  ⊘ pending scope confirmation from user
 
