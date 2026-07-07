@@ -25,7 +25,13 @@ BeforeAll {
         $global:__capUri    = $BaseURI
         $global:__capMethod = $Method
         @(
-            [pscustomobject]@{ id = 'conn-1'; displayName = 'SQL'; connectivityType = 'ShareableCloud'; gatewayId = 'gw-1' }
+            [pscustomobject]@{
+                id               = 'conn-1'
+                displayName      = 'SQL'
+                connectivityType = 'ShareableCloud'
+                gatewayId        = 'gw-1'
+                connectionDetails = [pscustomobject]@{ type = 'SQL'; path = 'server.database.windows.net;db1' }
+            }
             [pscustomobject]@{ id = 'conn-2'; displayName = 'Web'; connectivityType = 'ShareableCloud' }
         )
     }
@@ -54,10 +60,25 @@ Describe 'Get-FabricItemConnection' -Tag 'UnitTests' {
         $r[1].PSObject.Properties.Name | Should -Not -Contain 'GatewayName'
     }
 
-    It '-Raw returns the untouched response (no added names, no type)' {
+    It 'stamps ItemName and ResourceType when supplied (e.g. piped from Get-FabricItem)' {
+        $r = [pscustomobject]@{ id = 'it-1'; displayName = 'My Pipeline'; type = 'DataPipeline'; workspaceId = 'ws-1' } |
+            Get-FabricItemConnection
+        $r[0].ItemName     | Should -Be 'My Pipeline'
+        $r[0].ResourceType | Should -Be 'DataPipeline'
+    }
+
+    It 'parses and flattens connectionDetails into first-class properties' {
+        $r = Get-FabricItemConnection -WorkspaceId 'ws-1' -ItemId 'it-1'
+        $r[0].ConnectionDetailsParsed | Should -Not -BeNullOrEmpty
+        $r[0].Path                    | Should -Be 'server.database.windows.net;db1'
+        $r[0].Type                    | Should -Be 'SQL'
+    }
+
+    It '-Raw returns the untouched response (no added names, no type, no flattening)' {
         $r = Get-FabricItemConnection -WorkspaceId 'ws-1' -ItemId 'it-1' -Raw
         $r[0].PSObject.Properties.Name | Should -Not -Contain 'WorkspaceName'
         $r[0].PSObject.Properties.Name | Should -Not -Contain 'GatewayName'
+        $r[0].PSObject.Properties.Name | Should -Not -Contain 'ConnectionDetailsParsed'
         $r[0].PSObject.TypeNames[0]    | Should -Not -Be 'MicrosoftFabric.Connection'
         $r[0].id                       | Should -Be 'conn-1'
     }
