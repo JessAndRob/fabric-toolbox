@@ -90,6 +90,51 @@ Notes:
 
 ---
 
+## Coverage verification pass (2026-07-07)  ☑ DONE
+
+Ran `Validate-FabricModuleCoverage.ps1 -Api All -ValidationType Coverage` against source and
+**fixed two systematic validator false-negatives** (script was undercounting real coverage):
+
+1. **`-ResourceId` alias** — the `-Resource` path builder only honored `-WorkspaceId`, so every
+   function using the `-ResourceId` alias (all gateway cmds, connection roleAssignments,
+   deploymentPipeline patch/delete) lost its `{p}` id segment. Now honors either spelling.
+2. **Conditional URI assignment** — `$uri = if (...) { New-FabricAPIUri ... } else { ... }` was
+   not walked; the by-id/list branches of Get-FabricGateway / Get-FabricGatewayRoleAssignment
+   were invisible. Now collects every `New-FabricAPIUri` call in the RHS subtree.
+
+Result: **Fabric coverage 84.9% → 88.1% (483/548)** with no code change — purely a more accurate
+count. Overall All-API 64.4% (538/835); Power BI in-scope (Admin/Gateways) 78.6% (55/70).
+
+### Remaining Fabric `platform` gaps — classified
+**Genuine (candidates for new commands):**
+- `Get-FabricConnectionRoleAssignment` — GET /connections/{id}/roleAssignments (+by-id). Only
+  Add/Remove/Update exist; no getter.
+- GET /workspaces/{ws}/git/connection — the per-workspace git connection getter. NOTE the existing
+  `Get-FabricWorkspaceGitConnection` actually targets `admin/workspaces/discoverGitConnections`
+  (a different, admin endpoint) — so this per-workspace GET is genuinely uncovered.
+- GET /workspaces/{ws}/items/{itemId}/externalDataShares (+by-id) — provider-side list/get. The
+  existing `Get-FabricExternalDataShare` targets `admin/items/externalDataShares` (admin surface).
+- GET /workspaces/{ws}/onelake/settings — OneLake settings getter (new).
+- POST /workspaces/{ws}/onelake/settings/modifyDiagnostics — new.
+- POST /workspaces/{ws}/assignToDomain + /unassignFromDomain — workspace-side domain assign (new).
+
+**False-negatives (covered; validator still can't see — leave as-is, do NOT re-implement):**
+- GET /operations/{operationId} — `Get-FabricLongRunningOperation` builds it with a literal-base
+  `-f` string inside an if-expression (validator only resolves New-FabricAPIUri in conditionals).
+- GET /workspaces/{ws}/items/{itemId}/shortcuts/{shortcutPath}/{shortcutName} —
+  `Get-FabricOneLakeShortcut` issues the collection GET and filters client-side (two-segment id;
+  the by-id rule only matches single `/{p}`).
+- GET /domains — `Get-FabricDomain` targets `admin/domains`; spec lists a plain `/domains` (path
+  mismatch, effectively the same logical op).
+
+### Non-platform Fabric gaps (genuine, by group) — for bucket C+D
+apacheAirflowJob 10 · environment 8 · lakehouse 7 · admin 5 · dataflow 5 ·
+mirroredAzureDatabricksCatalog 4 · sqlEndpoint 3 · warehouse 3 · graphQLApi 2 ·
+mlModel 1 · realTimeIntelligence 1 · semanticModel 1 · sparkjobdefinition 1 ·
+variableLibrary 1 · warehouseSnapshot 1. (Each still to be spot-checked for false-negatives
+before implementing — the validator is now trustworthy but not perfect.)
+
 ## Validator false-negatives already confirmed (do NOT re-implement)
 Update-FabricConnection, connection roleAssignments add/remove/update, Remove/Update-FabricDeploymentPipeline,
-Get-FabricWorkspaceGitConnection, Get-FabricLongRunningOperation, Get-FabricDomain — all exist.
+Get-FabricLongRunningOperation, Get-FabricDomain — all exist (see classified list above for the
+specific still-uncounted ones).
