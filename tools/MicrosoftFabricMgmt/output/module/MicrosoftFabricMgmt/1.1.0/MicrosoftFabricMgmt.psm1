@@ -9884,6 +9884,111 @@ function Get-FabricConnection {
     }
 }
 #EndRegion '.\Public\Connections\Get-FabricConnection.ps1' 76
+#Region '.\Public\Connections\Get-FabricConnectionRoleAssignment.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists the role assignments on a Fabric connection, or retrieves a single one by id.
+
+.DESCRIPTION
+    The Get-FabricConnectionRoleAssignment function retrieves the role assignments of a connection
+    via `GET /connections/{connectionId}/roleAssignments`, or a single assignment via
+    `GET /connections/{connectionId}/roleAssignments/{connectionRoleAssignmentId}` when
+    -ConnectionRoleAssignmentId is supplied. Results are auto-paginated.
+
+    By default each assignment is stamped with the owning ConnectionId and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER ConnectionId
+    The unique identifier of the connection whose role assignments are listed. Mandatory. Binds from
+    the pipeline via the 'id' alias.
+
+.PARAMETER ConnectionRoleAssignmentId
+    The unique identifier of a single role assignment to retrieve. When omitted, all assignments are
+    listed.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricConnectionRoleAssignment -ConnectionId "abc123"
+
+    Lists all role assignments on the connection.
+
+.EXAMPLE
+    Get-FabricConnectionRoleAssignment -ConnectionId "abc123" -ConnectionRoleAssignmentId "ra1"
+
+    Retrieves the single role assignment with the specified id.
+
+.OUTPUTS
+    System.Object
+    Role assignment object(s) with all API-returned properties (id, principal, role) plus the owning
+    ConnectionId when enriched.
+
+.NOTES
+    - API Endpoint: GET /connections/{connectionId}/roleAssignments (+ /{connectionRoleAssignmentId})
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricConnectionRoleAssignment {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ConnectionId,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$ConnectionRoleAssignmentId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = if ($ConnectionRoleAssignmentId) {
+                New-FabricAPIUri -Resource 'connections' -ResourceId $ConnectionId -Subresource 'roleAssignments' -ItemId $ConnectionRoleAssignmentId
+            }
+            else {
+                New-FabricAPIUri -Resource 'connections' -ResourceId $ConnectionId -Subresource 'roleAssignments'
+            }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No role assignments found for connection '$ConnectionId'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            foreach ($assignment in $response) {
+                $assignment | Add-Member -NotePropertyName 'ConnectionId' -NotePropertyValue $ConnectionId -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.ConnectionRoleAssignment'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve role assignments for connection '$ConnectionId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Connections\Get-FabricConnectionRoleAssignment.ps1' 103
 #Region '.\Public\Connections\Get-FabricConnectionSupportedType.ps1' -1
 
 <#
@@ -21273,6 +21378,127 @@ function Get-FabricExternalDataShareInvitation {
     }
 }
 #EndRegion '.\Public\External Data Share\Get-FabricExternalDataShareInvitation.ps1' 91
+#Region '.\Public\External Data Share\Get-FabricItemExternalDataShare.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists the external data shares created for a Fabric item, or retrieves one by id.
+
+.DESCRIPTION
+    The Get-FabricItemExternalDataShare function retrieves the provider-side external data shares of
+    an item via `GET /workspaces/{workspaceId}/items/{itemId}/externalDataShares`, or a single share
+    via `GET /workspaces/{workspaceId}/items/{itemId}/externalDataShares/{externalDataShareId}` when
+    -ExternalDataShareId is supplied. Results are auto-paginated.
+
+    By default each share is enriched with a resolved WorkspaceName and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+    Note: for a tenant-wide, admin-level listing use Get-FabricExternalDataShare (admin surface).
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the item. Mandatory.
+
+.PARAMETER ItemId
+    The unique identifier of the item whose external data shares are listed. Mandatory. Binds from
+    the pipeline via the 'id' alias.
+
+.PARAMETER ExternalDataShareId
+    The unique identifier of a single external data share to retrieve. When omitted, all shares are
+    listed.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricItemExternalDataShare -WorkspaceId $ws -ItemId $item
+
+    Lists all external data shares created for the item.
+
+.EXAMPLE
+    Get-FabricItemExternalDataShare -WorkspaceId $ws -ItemId $item -ExternalDataShareId $share
+
+    Retrieves the single external data share with the specified id.
+
+.OUTPUTS
+    System.Object
+    External data share object(s) with all API-returned properties (id, paths, creatorPrincipal,
+    recipient, status, expirationTimeUtc, workspaceId, itemId, invitationUrl, acceptedByTenantId)
+    plus a resolved WorkspaceName when enriched.
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/items/{itemId}/externalDataShares (+ /{externalDataShareId})
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricItemExternalDataShare {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ItemId,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$ExternalDataShareId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = if ($ExternalDataShareId) {
+                New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', $ItemId, 'externalDataShares', $ExternalDataShareId)
+            }
+            else {
+                New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'items', $ItemId, 'externalDataShares')
+            }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No external data shares found for item '$ItemId'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $workspaceName = $WorkspaceId
+            try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+            catch {
+                Write-FabricLog -Message "Failed to resolve workspace name for ID '$WorkspaceId': $($_.Exception.Message)" -Level Debug
+            }
+
+            foreach ($share in $response) {
+                $share | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.ExternalDataShare'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve external data shares for item '$ItemId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\External Data Share\Get-FabricItemExternalDataShare.ps1' 119
 #Region '.\Public\External Data Share\New-FabricExternalDataShare.ps1' -1
 
 <#
@@ -37859,6 +38085,99 @@ function Get-FabricOneLakeDataAccessSecurity {
     }
 }
 #EndRegion '.\Public\OneLake\Get-FabricOneLakeDataAccessSecurity.ps1' 119
+#Region '.\Public\OneLake\Get-FabricOneLakeSetting.ps1' -1
+
+<#
+.SYNOPSIS
+    Retrieves the OneLake settings for a Fabric workspace.
+
+.DESCRIPTION
+    The Get-FabricOneLakeSetting function returns the workspace-level OneLake settings via
+    `GET /workspaces/{workspaceId}/onelake/settings`, including the diagnostic settings, any
+    immutability policies, and lifecycle configuration.
+
+    By default the result is enriched with a resolved WorkspaceName and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace whose OneLake settings are retrieved. Mandatory. Binds
+    from the pipeline via the 'id' alias.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricOneLakeSetting -WorkspaceId "workspace123"
+
+    Returns the OneLake settings for the specified workspace.
+
+.OUTPUTS
+    System.Object
+    The OneLake settings object (diagnostics, immutabilityPolicies, lifecycle) plus a resolved
+    WorkspaceName when enriched.
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/onelake/settings
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricOneLakeSetting {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WorkspaceId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'onelake', 'settings')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No OneLake settings found for workspace '$WorkspaceId'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $workspaceName = $WorkspaceId
+            try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+            catch {
+                Write-FabricLog -Message "Failed to resolve workspace name for ID '$WorkspaceId': $($_.Exception.Message)" -Level Debug
+            }
+
+            foreach ($setting in $response) {
+                $setting | Add-Member -NotePropertyName 'workspaceId'   -NotePropertyValue $WorkspaceId   -Force
+                $setting | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.OneLakeSetting'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve OneLake settings for workspace '$WorkspaceId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\OneLake\Get-FabricOneLakeSetting.ps1' 91
 #Region '.\Public\OneLake\Get-FabricOneLakeShortcut.ps1' -1
 
 <#
@@ -38683,6 +39002,97 @@ function Set-FabricOneLakeDataAccessSecurity {
     }
 }
 #EndRegion '.\Public\OneLake\Set-FabricOneLakeDataAccessSecurity.ps1' 184
+#Region '.\Public\OneLake\Set-FabricOneLakeDiagnostic.ps1' -1
+
+<#
+.SYNOPSIS
+    Enables or disables OneLake diagnostic settings for a Fabric workspace.
+
+.DESCRIPTION
+    The Set-FabricOneLakeDiagnostic function modifies the workspace OneLake diagnostic settings via
+    `POST /workspaces/{workspaceId}/onelake/settings/modifyDiagnostics`. When enabling diagnostics,
+    supply a -Destination describing where the logs are stored; when disabling, the destination is
+    not required.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Status
+    The diagnostics status to set: Enabled or Disabled. Mandatory.
+
+.PARAMETER Destination
+    A hashtable describing the destination where OneLake diagnostic logs are stored. Required when
+    enabling diagnostics; ignored when disabling.
+
+.EXAMPLE
+    Set-FabricOneLakeDiagnostic -WorkspaceId $ws -Status Disabled
+
+    Disables OneLake diagnostics for the workspace.
+
+.EXAMPLE
+    Set-FabricOneLakeDiagnostic -WorkspaceId $ws -Status Enabled -Destination $dest
+
+    Enables OneLake diagnostics, routing logs to the supplied destination.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/onelake/settings/modifyDiagnostics
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Set-FabricOneLakeDiagnostic {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Enabled', 'Disabled')]
+        [string]$Status,
+
+        [Parameter()]
+        [hashtable]$Destination
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'onelake', 'settings', 'modifyDiagnostics')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ status = $Status }
+            if ($Destination) { $body.destination = $Destination }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Workspace '$WorkspaceId'", "Set OneLake diagnostics to '$Status'")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "OneLake diagnostics for workspace '$WorkspaceId' set to '$Status'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to modify OneLake diagnostics for workspace '$WorkspaceId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\OneLake\Set-FabricOneLakeDiagnostic.ps1' 89
 #Region '.\Public\OneLake\Set-FabricOneLakeImmutabilityPolicy.ps1' -1
 
 <#
@@ -52311,6 +52721,84 @@ function Add-FabricWorkspaceCapacity {
     }
 }
 #EndRegion '.\Public\Workspace\Add-FabricWorkspaceCapacity.ps1' 75
+#Region '.\Public\Workspace\Add-FabricWorkspaceDomain.ps1' -1
+
+<#
+.SYNOPSIS
+    Assigns a Fabric workspace to a domain.
+
+.DESCRIPTION
+    The Add-FabricWorkspaceDomain function assigns a workspace to a domain via
+    `POST /workspaces/{workspaceId}/assignToDomain`. This is the workspace-side assignment (a
+    workspace admin assigns their own workspace); for the domain-side bulk assignment used by
+    Fabric administrators, see Add-FabricDomainWorkspaceById.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace to assign. Mandatory. Binds from the pipeline via the
+    'id' alias.
+
+.PARAMETER DomainId
+    The unique identifier of the domain to assign the workspace to. Mandatory.
+
+.EXAMPLE
+    Add-FabricWorkspaceDomain -WorkspaceId $ws -DomainId $domain
+
+    Assigns the workspace to the domain.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/assignToDomain
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Add-FabricWorkspaceDomain {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DomainId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'assignToDomain')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ domainId = $DomainId }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Workspace '$WorkspaceId'", "Assign to domain '$DomainId'")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Workspace '$WorkspaceId' assigned to domain '$DomainId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to assign workspace '$WorkspaceId' to domain. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Workspace\Add-FabricWorkspaceDomain.ps1' 76
 #Region '.\Public\Workspace\Add-FabricWorkspaceIdentity.ps1' -1
 
 <#
@@ -52728,85 +53216,103 @@ function Get-FabricWorkspaceAsAdmin {
 
 <#
 .SYNOPSIS
-Retrieves Git connection details for Microsoft Fabric workspaces.
+    Retrieves the Git connection details for a Fabric workspace.
 
 .DESCRIPTION
-The `Get-FabricWorkspaceGitConnection` function queries the Fabric API to obtain Git integration details for one or more workspaces. You can optionally filter results by specifying a WorkspaceId.
+    The Get-FabricWorkspaceGitConnection function returns the Git integration connection for a single
+    workspace via `GET /workspaces/{workspaceId}/git/connection`. The response includes the Git
+    provider details, sync details, and the current connection state.
+
+    By default the result is enriched with a resolved WorkspaceName and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+    Note: for a tenant-wide, admin-level listing of every workspace's Git connection, use
+    Get-FabricAdminGitConnection instead (that calls the admin discovery endpoint).
 
 .PARAMETER WorkspaceId
-(Optional) The unique identifier of the workspace to filter Git connection details for. If omitted, all available workspace Git connections are returned.
+    The unique identifier of the workspace whose Git connection is retrieved. Mandatory. Binds from
+    the pipeline via the 'id' alias.
 
 .PARAMETER Raw
-If specified, returns the untouched API response with no added properties or type decoration.
+    If specified, returns the untouched API response with no added properties or type decoration.
 
 .EXAMPLE
-Get-FabricWorkspaceGitConnection -WorkspaceId "workspace123"
+    Get-FabricWorkspaceGitConnection -WorkspaceId "workspace123"
 
-Returns the Git connection details for the workspace with ID "workspace123".
+    Returns the Git connection details for the specified workspace.
 
 .EXAMPLE
-Get-FabricWorkspaceGitConnection
+    Get-FabricWorkspace -WorkspaceName 'Analytics' | Get-FabricWorkspaceGitConnection
 
-Returns Git connection details for all available workspaces.
+    Returns the Git connection for the 'Analytics' workspace (WorkspaceId binds from the pipeline).
+
+.OUTPUTS
+    System.Object
+    The workspace Git connection object (gitProviderDetails, gitSyncDetails, gitConnectionState)
+    plus a resolved WorkspaceName when enriched.
 
 .NOTES
-- Requires the `$FabricConfig` global variable to be configured with `BaseUrl` and `FabricHeaders`.
-- Validates authentication using `Test-TokenExpired` before making API requests.
-- Returns matching Git connection details or `$null` if no matches are found.
+    - API Endpoint: GET /workspaces/{workspaceId}/git/connection
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
 
-Author: Tiago Balabuch
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
 #>
-
 function Get-FabricWorkspaceGitConnection {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
         [ValidateNotNullOrEmpty()]
+        [Alias('id')]
         [string]$WorkspaceId,
 
         [Parameter()]
         [switch]$Raw
     )
-    try {
-        # Validate authentication
-        Invoke-FabricAuthCheck -ThrowOnFailure
 
-        # Construct the API endpoint URI
-        $apiEndpointURI = New-FabricAPIUri -Resource 'admin/workspaces/discoverGitConnections'
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
 
-        # Make the API request
-        $apiParams = @{
-            BaseURI = $apiEndpointURI
-            Headers = $script:FabricAuthContext.FabricHeaders
-            Method = 'Get'
-        }
-        $dataItems = Invoke-FabricAPIRequest @apiParams
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'git', 'connection')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
 
-        if ($Raw) {
-            return $dataItems
-        }
-
-        # Apply filtering - using custom property 'workspaceId' instead of 'Id'
-        if ($WorkspaceId) {
-            $matchedItems = $dataItems.Where({ $_.workspaceId -eq $WorkspaceId }, 'First')
-            if ($matchedItems) {
-                $matchedItems
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
             }
-            else {
-                Write-FabricLog -Message "No Git connection found for WorkspaceId '$WorkspaceId'." -Level Warning
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No Git connection found for workspace '$WorkspaceId'." -Level Warning
+                return $null
             }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $workspaceName = $WorkspaceId
+            try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+            catch {
+                Write-FabricLog -Message "Failed to resolve workspace name for ID '$WorkspaceId': $($_.Exception.Message)" -Level Debug
+            }
+
+            foreach ($connection in $response) {
+                $connection | Add-Member -NotePropertyName 'workspaceId'   -NotePropertyValue $WorkspaceId   -Force
+                $connection | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.WorkspaceGitConnection'
+            $response
         }
-        else {
-            $dataItems
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve Git connection for workspace '$WorkspaceId'. Error: $errorDetails" -Level Error
         }
-    }
-    catch {
-        # Capture and log error details
-        $errorDetails = $_.Exception.Message
-        Write-FabricLog -Message "Failed to retrieve workspace. Error: $errorDetails" -Level Error
     }
 }
-#EndRegion '.\Public\Workspace\Get-FabricWorkspaceGitConnection.ps1' 81
+#EndRegion '.\Public\Workspace\Get-FabricWorkspaceGitConnection.ps1' 99
 #Region '.\Public\Workspace\Get-FabricWorkspaceRoleAssignment.ps1' -1
 
 <#
@@ -53158,6 +53664,71 @@ function Remove-FabricWorkspaceCapacity {
     }
 }
 #EndRegion '.\Public\Workspace\Remove-FabricWorkspaceCapacity.ps1' 61
+#Region '.\Public\Workspace\Remove-FabricWorkspaceDomain.ps1' -1
+
+<#
+.SYNOPSIS
+    Unassigns a Fabric workspace from its domain.
+
+.DESCRIPTION
+    The Remove-FabricWorkspaceDomain function unassigns a workspace from the domain it is currently
+    assigned to via `POST /workspaces/{workspaceId}/unassignFromDomain`. This is the workspace-side
+    operation; for the domain-side bulk unassignment used by Fabric administrators, see
+    Remove-FabricDomainWorkspace.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace to unassign. Mandatory. Binds from the pipeline via the
+    'id' alias.
+
+.EXAMPLE
+    Remove-FabricWorkspaceDomain -WorkspaceId $ws
+
+    Unassigns the workspace from its domain.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/unassignFromDomain
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricWorkspaceDomain {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WorkspaceId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'unassignFromDomain')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            if ($PSCmdlet.ShouldProcess("Workspace '$WorkspaceId'", "Unassign from domain")) {
+                $apiParams = @{
+                    BaseURI = $apiEndpointURI
+                    Headers = $script:FabricAuthContext.FabricHeaders
+                    Method  = 'Post'
+                }
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Workspace '$WorkspaceId' unassigned from its domain." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to unassign workspace '$WorkspaceId' from domain. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Workspace\Remove-FabricWorkspaceDomain.ps1' 63
 #Region '.\Public\Workspace\Remove-FabricWorkspaceIdentity.ps1' -1
 
 <#

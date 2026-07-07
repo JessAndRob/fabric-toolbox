@@ -84,7 +84,21 @@ Notes:
 - Confirm `New-FabricItem`/`Update-FabricItem`/`Remove-FabricItem`/`Get-FabricItemDefinition` truly
   absent before writing (grep confirmed absent 2026-07-07).
 
-## Bucket C+D — Per-resource + small fixes (~60)  ☐ (not started)
+## Bucket D — Platform small fixes  ☑ COMPLETE (pending build confirmation)
+
+7 commands (6 new + 1 repurpose) covering the genuine platform gaps found in the verification pass:
+- ☑ `Get-FabricConnectionRoleAssignment` — GET /connections/{id}/roleAssignments (+by-id)
+- ☑ `Get-FabricWorkspaceGitConnection` — **repurposed** to GET /workspaces/{ws}/git/connection
+  (was a mis-targeted duplicate of the admin discover endpoint; WorkspaceId now mandatory)
+- ☑ `Get-FabricItemExternalDataShare` — GET .../items/{itemId}/externalDataShares (+by-id)
+- ☑ `Get-FabricOneLakeSetting` — GET .../onelake/settings
+- ☑ `Set-FabricOneLakeDiagnostic` — POST .../onelake/settings/modifyDiagnostics
+- ☑ `Add-FabricWorkspaceDomain` — POST .../assignToDomain
+- ☑ `Remove-FabricWorkspaceDomain` — POST .../unassignFromDomain
+
+All with behavior tests + CHANGELOG (Added + Fixed).
+
+## Bucket C — Per-resource (~55)  ◐ scoping
 ## Bucket E — Power BI Admin + Gateways (15)  ☐ (not started)
 ## Bucket F — Legacy Power BI (~216)  ⊘ pending scope confirmation from user
 

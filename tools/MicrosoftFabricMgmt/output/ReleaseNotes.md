@@ -2,6 +2,14 @@
 
 ### Added
 
+- **Platform coverage fills** (6 new commands): `Get-FabricConnectionRoleAssignment`
+  (GET /connections/{id}/roleAssignments + by-id — completes the connection role-assignment set that
+  previously had only Add/Remove/Update), `Get-FabricItemExternalDataShare` (provider-side
+  GET .../items/{itemId}/externalDataShares + by-id), `Get-FabricOneLakeSetting`
+  (GET .../onelake/settings), `Set-FabricOneLakeDiagnostic` (POST .../onelake/settings/modifyDiagnostics),
+  and `Add-FabricWorkspaceDomain` / `Remove-FabricWorkspaceDomain` (workspace-side
+  assignToDomain / unassignFromDomain). Getters enrich + decorate and honor `-Raw`; mutating commands
+  support `-WhatIf`/`-Confirm`.
 - **Generic item operations** (10 new commands) filling the tenant-generic `/workspaces/{ws}/items`
   gaps that had no wrapper: `New-FabricItem` / `Update-FabricItem` / `Remove-FabricItem`
   (create/patch/delete any item type), `Get-FabricItemDefinition` / `Update-FabricItemDefinition`
@@ -42,6 +50,10 @@
 
 ### Fixed
 
+- **`Get-FabricWorkspaceGitConnection`** now calls the per-workspace endpoint
+  `GET /workspaces/{workspaceId}/git/connection` (returning that workspace's Git provider/sync/state)
+  instead of duplicating the admin discovery endpoint. `WorkspaceId` is now mandatory and pipeline-
+  bindable. The tenant-wide admin listing remains available via `Get-FabricAdminGitConnection`.
 - **`Get-FabricConnection -ConnectionName` validation**: removed the over-restrictive
   `ValidatePattern('^[a-zA-Z0-9_ ]*$')` that rejected valid connection names containing hyphens,
   dots, parentheses, etc. The name is a filter, so it now accepts any string (`ValidateNotNullOrEmpty`),
