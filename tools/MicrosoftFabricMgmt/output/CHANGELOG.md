@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dataflow query & job schedules** (2 new): `Invoke-FabricDataflowQuery`
+  (POST `.../dataflows/{id}/executeQuery` with `-QueryName` / `-CustomMashupDocument`) and
+  `New-FabricDataflowJobSchedule` (POST `.../dataflows/{id}/jobs/{Execute|ApplyChanges}/schedules`).
+- **Domain role-assignment admin** (2 new): `Get-FabricDomainRoleAssignment`
+  (GET `/admin/domains/{id}/roleAssignments`) and `Sync-FabricDomainRoleAssignment`
+  (POST `.../roleAssignments/syncToSubdomains`, propagating a role to subdomains).
 - **Lakehouse Refresh Materialized Lake Views schedules** (3 new):
   `New`/`Update`/`Remove-FabricLakehouseRefreshMaterializedLakeViewsSchedule`
   (POST/PATCH/DELETE `.../lakehouses/{id}/jobs/RefreshMaterializedLakeViews/schedules[/{scheduleId}]`;

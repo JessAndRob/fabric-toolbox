@@ -12736,6 +12736,98 @@ function Get-FabricDataflowParameter {
     }
 }
 #EndRegion '.\Public\Dataflow\Get-FabricDataflowParameter.ps1' 110
+#Region '.\Public\Dataflow\Invoke-FabricDataflowQuery.ps1' -1
+
+<#
+.SYNOPSIS
+    Executes a query against a Fabric dataflow.
+
+.DESCRIPTION
+    The Invoke-FabricDataflowQuery function runs a named query (optionally with a custom mashup
+    document) against a dataflow via `POST /workspaces/{workspaceId}/dataflows/{dataflowId}/executeQuery`.
+    The call is long-running; the module transparently waits for and returns the result.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the dataflow. Mandatory.
+
+.PARAMETER DataflowId
+    The unique identifier of the dataflow. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER QueryName
+    The name of the query to execute. Mandatory.
+
+.PARAMETER CustomMashupDocument
+    An optional custom mashup (M) document to execute in place of the stored query definition.
+
+.EXAMPLE
+    Invoke-FabricDataflowQuery -WorkspaceId $ws -DataflowId $df -QueryName 'Query1'
+
+    Executes the named query and returns its result.
+
+.OUTPUTS
+    System.Object
+    The query execution result returned by the API.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/dataflows/{dataflowId}/executeQuery
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Invoke-FabricDataflowQuery {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$DataflowId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$QueryName,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$CustomMashupDocument
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'dataflows', $DataflowId, 'executeQuery')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ queryName = $QueryName }
+            if ($PSBoundParameters.ContainsKey('CustomMashupDocument')) { $body.customMashupDocument = $CustomMashupDocument }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Dataflow '$DataflowId'", "Execute query '$QueryName'")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Query '$QueryName' executed on dataflow '$DataflowId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to execute query on dataflow '$DataflowId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Dataflow\Invoke-FabricDataflowQuery.ps1' 90
 #Region '.\Public\Dataflow\New-FabricDataflow.ps1' -1
 
 <#
@@ -12840,6 +12932,107 @@ function New-FabricDataflow {
     }
 }
 #EndRegion '.\Public\Dataflow\New-FabricDataflow.ps1' 102
+#Region '.\Public\Dataflow\New-FabricDataflowJobSchedule.ps1' -1
+
+<#
+.SYNOPSIS
+    Creates a schedule for a Fabric dataflow job.
+
+.DESCRIPTION
+    The New-FabricDataflowJobSchedule function creates a schedule for a dataflow background job via
+    `POST /workspaces/{workspaceId}/dataflows/{dataflowId}/jobs/{jobType}/schedules`, for either the
+    Execute or ApplyChanges job type.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the dataflow. Mandatory.
+
+.PARAMETER DataflowId
+    The unique identifier of the dataflow. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER JobType
+    The dataflow job type to schedule: Execute or ApplyChanges. Mandatory.
+
+.PARAMETER Enabled
+    Whether the schedule is enabled. Mandatory.
+
+.PARAMETER Configuration
+    The schedule configuration hashtable (type, startDateTime, endDateTime, localTimeZoneId, etc.).
+    Mandatory.
+
+.EXAMPLE
+    $cfg = @{ type = 'Daily'; startDateTime = '2026-01-01T00:00:00'; endDateTime = '2026-12-31T00:00:00'; localTimeZoneId = 'UTC'; times = @('06:00') }
+    New-FabricDataflowJobSchedule -WorkspaceId $ws -DataflowId $df -JobType Execute -Enabled $true -Configuration $cfg
+
+    Creates a daily Execute schedule for the dataflow.
+
+.OUTPUTS
+    System.Object
+    The created schedule object returned by the API.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/dataflows/{dataflowId}/jobs/{jobType}/schedules
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function New-FabricDataflowJobSchedule {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$DataflowId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Execute', 'ApplyChanges')]
+        [string]$JobType,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$Enabled,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable]$Configuration
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'dataflows', $DataflowId, 'jobs', $JobType, 'schedules')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                enabled       = $Enabled
+                configuration = $Configuration
+            }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Dataflow '$DataflowId'", "Create $JobType schedule")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "$JobType schedule created for dataflow '$DataflowId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to create $JobType schedule for dataflow '$DataflowId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Dataflow\New-FabricDataflowJobSchedule.ps1' 99
 #Region '.\Public\Dataflow\Remove-FabricDataflow.ps1' -1
 
 <#
@@ -16391,6 +16584,91 @@ function Get-FabricDomain {
     }
 }
 #EndRegion '.\Public\Domain\Get-FabricDomain.ps1' 97
+#Region '.\Public\Domain\Get-FabricDomainRoleAssignment.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists the role assignments of a Fabric domain.
+
+.DESCRIPTION
+    The Get-FabricDomainRoleAssignment function retrieves the role assignments (admins and
+    contributors) of a domain via `GET /admin/domains/{domainId}/roleAssignments`. Results are
+    auto-paginated. Requires Fabric administrator permissions.
+
+    By default each assignment is stamped with the owning DomainId and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER DomainId
+    The unique identifier of the domain whose role assignments are listed. Mandatory. Binds from the
+    pipeline via the 'id' alias.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricDomainRoleAssignment -DomainId $domain
+
+    Lists the admins and contributors assigned to the domain.
+
+.OUTPUTS
+    System.Object
+    Role assignment object(s) with all API-returned properties plus the owning DomainId when enriched.
+
+.NOTES
+    - API Endpoint: GET /admin/domains/{domainId}/roleAssignments
+    - Requires: Fabric administrator; authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricDomainRoleAssignment {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$DomainId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('admin', 'domains', $DomainId, 'roleAssignments')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No role assignments found for domain '$DomainId'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            foreach ($assignment in $response) {
+                $assignment | Add-Member -NotePropertyName 'DomainId' -NotePropertyValue $DomainId -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.DomainRoleAssignment'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve role assignments for domain '$DomainId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Domain\Get-FabricDomainRoleAssignment.ps1' 83
 #Region '.\Public\Domain\Get-FabricDomainWorkspace.ps1' -1
 
 <#
@@ -16846,6 +17124,83 @@ function Remove-FabricDomainWorkspaceRoleAssignment {
     }
 }
 #EndRegion '.\Public\Domain\Remove-FabricDomainWorkspaceRoleAssignment.ps1' 99
+#Region '.\Public\Domain\Sync-FabricDomainRoleAssignment.ps1' -1
+
+<#
+.SYNOPSIS
+    Propagates a Fabric domain's role assignments to its subdomains.
+
+.DESCRIPTION
+    The Sync-FabricDomainRoleAssignment function syncs the role assignments of the specified role from
+    a parent domain down to all of its subdomains via
+    `POST /admin/domains/{domainId}/roleAssignments/syncToSubdomains`. Requires Fabric administrator
+    permissions.
+
+.PARAMETER DomainId
+    The unique identifier of the parent domain. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Role
+    The role whose assignments are synced to subdomains: Admin or Contributor. Mandatory.
+
+.EXAMPLE
+    Sync-FabricDomainRoleAssignment -DomainId $domain -Role Admin
+
+    Propagates the domain's admin role assignments to all subdomains.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /admin/domains/{domainId}/roleAssignments/syncToSubdomains
+    - Requires: Fabric administrator; authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Sync-FabricDomainRoleAssignment {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$DomainId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Admin', 'Contributor')]
+        [string]$Role
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('admin', 'domains', $DomainId, 'roleAssignments', 'syncToSubdomains')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ role = $Role }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Domain '$DomainId'", "Sync '$Role' role assignments to subdomains")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Synced '$Role' role assignments to subdomains of domain '$DomainId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to sync role assignments for domain '$DomainId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Domain\Sync-FabricDomainRoleAssignment.ps1' 75
 #Region '.\Public\Domain\Update-FabricDomain.ps1' -1
 
 <#

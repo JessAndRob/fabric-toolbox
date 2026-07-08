@@ -126,11 +126,22 @@ Get-FabricOneLakeShortcut (shortcuts/{path}/{name}), Get-FabricDomain (/domains 
   - GET /azuredatabricks/catalogs/{catalogName}/schemas → Get-FabricAzureDatabricksSchema (resp DatabricksSchemas)
   - GET /azuredatabricks/catalogs/{catalogName}/schemas/{schemaName}/tables → Get-FabricAzureDatabricksTable (resp DatabricksTables)
   - POST /mirroredAzureDatabricksCatalogs/{id}/refreshCatalogMetadata → Update-FabricMirroredAzureDatabricksCatalogMetadata (verb: Update, per Update-FabricSQLEndpointMetadata precedent)
-- ☐ **C4 dataflow** — executeQuery + ApplyChanges/Execute instances&schedules (5 ep; check Start-FabricItemJob/New-FabricItemSchedule generic coverage first)
-- ☐ **C5 environment libraries** — staging library upload/import/remove/delete + export external (6 ep)
+- ☑ **C4 dataflow** — Invoke-FabricDataflowQuery + New-FabricDataflowJobSchedule (2 fns). Execute/ApplyChanges
+  *instances* were false-negatives (Start-FabricDataflowJob -JobType already covers them).
+- ◐ **C5 environment libraries** — 6 ep, but existing Get-FabricEnvironmentLibrary / Get/Import/Remove-FabricEnvironmentStagingLibrary
+  already hit `environments/{id}/(staging/)libraries`. Genuine NEW = the 4 **external-library** ops
+  (verify import/remove staging first): GET libraries/exportExternalLibraries, GET staging/libraries/exportExternalLibraries,
+  POST staging/libraries/importExternalLibraries, POST staging/libraries/removeExternalLibrary.
+  (POST/DELETE staging/libraries/{libraryName} are likely false-negatives of Import/Remove-FabricEnvironmentStagingLibrary.)
 - ☐ **C6 apacheAirflowJob (beta)** — files (GET/PUT/DELETE/list) + poolTemplates (CRUD) + settings (GET/PATCH) (10 ep)
 - ☑ **C7 lakehouse RefreshMaterializedLakeViews schedules** — New/Update/Remove (3 fns, tests, CHANGELOG; build pending)
-- ☐ **C8 admin** — 5 ep (all under `/admin/...`). **SPOT-CHECK for false-negatives first** — module has
+- ◐ **C8 admin** — DONE the 2 genuine: Get-FabricDomainRoleAssignment + Sync-FabricDomainRoleAssignment.
+  False-negatives confirmed: bulkAssign (Add-FabricDomainWorkspaceByRoleAssignment), unassignWorkspaces +
+  unassignAllWorkspaces (Remove-FabricDomainWorkspace covers both). AMBIGUOUS/left as-is: capacity
+  delegatedTenantSettingOverrides/{name}/update — existing Update-FabricCapacityTenantSettingOverrides POSTs
+  to `.../delegatedTenantSettingOverrides` (no /{name}/update suffix); needs live-API verification before changing.
+  Original scoping notes below:
+  **SPOT-CHECK for false-negatives first** — module has
   Add-FabricDomainWorkspaceByRoleAssignment / Remove-FabricDomainWorkspaceRoleAssignment / Remove-FabricDomainWorkspace
   which may already cover the bulk role-assign/unassign + unassignWorkspaces. Genuine candidates:
   - GET /admin/domains/{id}/roleAssignments → Get-FabricDomainRoleAssignment (list) — check not present
