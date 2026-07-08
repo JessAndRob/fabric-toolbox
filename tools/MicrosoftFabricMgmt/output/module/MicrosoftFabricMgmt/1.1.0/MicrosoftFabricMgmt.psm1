@@ -17315,6 +17315,105 @@ function Update-FabricDomain {
     }
 }
 #EndRegion '.\Public\Domain\Update-FabricDomain.ps1' 112
+#Region '.\Public\Environment\Export-FabricEnvironmentExternalLibrary.ps1' -1
+
+<#
+.SYNOPSIS
+    Exports the external library specification of a Fabric environment.
+
+.DESCRIPTION
+    The Export-FabricEnvironmentExternalLibrary function downloads the external library specification
+    (e.g. the PyPI/Conda requirements) of an environment. By default it exports the published
+    libraries via `GET /workspaces/{workspaceId}/environments/{environmentId}/libraries/exportExternalLibraries`;
+    pass -Staging to export the staging libraries via
+    `GET /workspaces/{workspaceId}/environments/{environmentId}/staging/libraries/exportExternalLibraries`.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the environment. Mandatory.
+
+.PARAMETER EnvironmentId
+    The unique identifier of the environment. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Staging
+    If specified, exports the staging (pending) external libraries instead of the published ones.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    Export-FabricEnvironmentExternalLibrary -WorkspaceId $ws -EnvironmentId $env
+
+    Exports the published external library specification.
+
+.EXAMPLE
+    Export-FabricEnvironmentExternalLibrary -WorkspaceId $ws -EnvironmentId $env -Staging
+
+    Exports the staging external library specification.
+
+.OUTPUTS
+    System.Object
+    The exported external library specification.
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/environments/{environmentId}/libraries/exportExternalLibraries
+    - API Endpoint: GET /workspaces/{workspaceId}/environments/{environmentId}/staging/libraries/exportExternalLibraries
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Export-FabricEnvironmentExternalLibrary {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$EnvironmentId,
+
+        [Parameter()]
+        [switch]$Staging,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $segments = if ($Staging) {
+                @('workspaces', $WorkspaceId, 'environments', $EnvironmentId, 'staging', 'libraries', 'exportExternalLibraries')
+            }
+            else {
+                @('workspaces', $WorkspaceId, 'environments', $EnvironmentId, 'libraries', 'exportExternalLibraries')
+            }
+            $apiEndpointURI = New-FabricAPIUri -Segments $segments
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if ($Raw) {
+                return $response
+            }
+
+            Write-FabricLog -Message "External libraries exported for environment '$EnvironmentId'." -Level Debug
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to export external libraries for environment '$EnvironmentId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Environment\Export-FabricEnvironmentExternalLibrary.ps1' 97
 #Region '.\Public\Environment\Get-FabricEnvironment.ps1' -1
 
 <#
@@ -17949,6 +18048,92 @@ function Get-FabricEnvironmentStagingSparkCompute {
     }
 }
 #EndRegion '.\Public\Environment\Get-FabricEnvironmentStagingSparkCompute.ps1' 109
+#Region '.\Public\Environment\Import-FabricEnvironmentStagingExternalLibrary.ps1' -1
+
+<#
+.SYNOPSIS
+    Imports an external library specification file into a Fabric environment's staging libraries.
+
+.DESCRIPTION
+    The Import-FabricEnvironmentStagingExternalLibrary function uploads an external library
+    specification file (e.g. a requirements.txt or environment.yml) to an environment's staging
+    libraries via
+    `POST /workspaces/{workspaceId}/environments/{environmentId}/staging/libraries/importExternalLibraries`.
+    The file is sent as an application/octet-stream body.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the environment. Mandatory.
+
+.PARAMETER EnvironmentId
+    The unique identifier of the environment. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER FilePath
+    The path to the external library specification file to upload. Mandatory. The file must exist.
+
+.EXAMPLE
+    Import-FabricEnvironmentStagingExternalLibrary -WorkspaceId $ws -EnvironmentId $env -FilePath .\requirements.txt
+
+    Uploads requirements.txt as the environment's staging external libraries.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/environments/{environmentId}/staging/libraries/importExternalLibraries
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Import-FabricEnvironmentStagingExternalLibrary {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$EnvironmentId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [ValidateScript({ Test-Path -Path $_ -PathType Leaf })]
+        [string]$FilePath
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'environments', $EnvironmentId, 'staging', 'libraries', 'importExternalLibraries')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            # The file is uploaded verbatim as an octet-stream body.
+            $fileContent = Get-Content -Path $FilePath -Raw
+
+            $apiParams = @{
+                BaseURI     = $apiEndpointURI
+                Headers     = $script:FabricAuthContext.FabricHeaders
+                Method      = 'Post'
+                Body        = $fileContent
+                ContentType = 'application/octet-stream'
+            }
+
+            if ($PSCmdlet.ShouldProcess("Environment '$EnvironmentId'", "Import external libraries from '$FilePath'")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "External libraries imported into environment '$EnvironmentId' from '$FilePath'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to import external libraries into environment '$EnvironmentId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Environment\Import-FabricEnvironmentStagingExternalLibrary.ps1' 84
 #Region '.\Public\Environment\Import-FabricEnvironmentStagingLibrary.ps1' -1
 
 <#
@@ -18250,6 +18435,99 @@ function Remove-FabricEnvironment {
     }
 }
 #EndRegion '.\Public\Environment\Remove-FabricEnvironment.ps1' 67
+#Region '.\Public\Environment\Remove-FabricEnvironmentStagingExternalLibrary.ps1' -1
+
+<#
+.SYNOPSIS
+    Removes an external library from a Fabric environment's staging libraries.
+
+.DESCRIPTION
+    The Remove-FabricEnvironmentStagingExternalLibrary function removes a named external (PyPI/Conda)
+    library from an environment's staging libraries via
+    `POST /workspaces/{workspaceId}/environments/{environmentId}/staging/libraries/removeExternalLibrary`.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the environment. Mandatory.
+
+.PARAMETER EnvironmentId
+    The unique identifier of the environment. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Name
+    The name of the external library to remove. Mandatory.
+
+.PARAMETER Version
+    The version of the external library to remove. Mandatory.
+
+.EXAMPLE
+    Remove-FabricEnvironmentStagingExternalLibrary -WorkspaceId $ws -EnvironmentId $env -Name 'numpy' -Version '1.26.0'
+
+    Removes numpy 1.26.0 from the environment's staging libraries.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/environments/{environmentId}/staging/libraries/removeExternalLibrary
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricEnvironmentStagingExternalLibrary {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$EnvironmentId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Version
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'environments', $EnvironmentId, 'staging', 'libraries', 'removeExternalLibrary')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                name    = $Name
+                version = $Version
+            }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("External library '$Name' ($Version) on environment '$EnvironmentId'", "Remove")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "External library '$Name' ($Version) removed from environment '$EnvironmentId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to remove external library '$Name' from environment '$EnvironmentId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Environment\Remove-FabricEnvironmentStagingExternalLibrary.ps1' 91
 #Region '.\Public\Environment\Remove-FabricEnvironmentStagingLibrary.ps1' -1
 
 

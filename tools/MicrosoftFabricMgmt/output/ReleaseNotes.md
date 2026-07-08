@@ -2,6 +2,11 @@
 
 ### Added
 
+- **Environment external libraries** (3 new): `Export-FabricEnvironmentExternalLibrary`
+  (GET published, or `-Staging` for staging, `exportExternalLibraries`),
+  `Import-FabricEnvironmentStagingExternalLibrary` (POST `importExternalLibraries`, uploading a
+  requirements/spec file as octet-stream) and `Remove-FabricEnvironmentStagingExternalLibrary`
+  (POST `removeExternalLibrary` with `-Name`/`-Version`).
 - **Dataflow query & job schedules** (2 new): `Invoke-FabricDataflowQuery`
   (POST `.../dataflows/{id}/executeQuery` with `-QueryName` / `-CustomMashupDocument`) and
   `New-FabricDataflowJobSchedule` (POST `.../dataflows/{id}/jobs/{Execute|ApplyChanges}/schedules`).

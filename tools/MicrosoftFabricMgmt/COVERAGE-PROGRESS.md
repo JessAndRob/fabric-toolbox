@@ -128,12 +128,27 @@ Get-FabricOneLakeShortcut (shortcuts/{path}/{name}), Get-FabricDomain (/domains 
   - POST /mirroredAzureDatabricksCatalogs/{id}/refreshCatalogMetadata → Update-FabricMirroredAzureDatabricksCatalogMetadata (verb: Update, per Update-FabricSQLEndpointMetadata precedent)
 - ☑ **C4 dataflow** — Invoke-FabricDataflowQuery + New-FabricDataflowJobSchedule (2 fns). Execute/ApplyChanges
   *instances* were false-negatives (Start-FabricDataflowJob -JobType already covers them).
-- ◐ **C5 environment libraries** — 6 ep, but existing Get-FabricEnvironmentLibrary / Get/Import/Remove-FabricEnvironmentStagingLibrary
+- ☑ **C5 environment external libraries** — Export-FabricEnvironmentExternalLibrary (-Staging),
+  Import-FabricEnvironmentStagingExternalLibrary (octet-stream), Remove-FabricEnvironmentStagingExternalLibrary
+  (3 fns / 4 ep). staging/libraries/{libraryName} POST+DELETE left as false-negatives of existing Import/Remove-FabricEnvironmentStagingLibrary.
+  Original note: 6 ep, but existing Get-FabricEnvironmentLibrary / Get/Import/Remove-FabricEnvironmentStagingLibrary
   already hit `environments/{id}/(staging/)libraries`. Genuine NEW = the 4 **external-library** ops
   (verify import/remove staging first): GET libraries/exportExternalLibraries, GET staging/libraries/exportExternalLibraries,
   POST staging/libraries/importExternalLibraries, POST staging/libraries/removeExternalLibrary.
   (POST/DELETE staging/libraries/{libraryName} are likely false-negatives of Import/Remove-FabricEnvironmentStagingLibrary.)
-- ☐ **C6 apacheAirflowJob (beta)** — files (GET/PUT/DELETE/list) + poolTemplates (CRUD) + settings (GET/PATCH) (10 ep)
+- ☐ **C6 apacheAirflowJob (beta)** — 10 ep, ~8 fns, none covered. ALL need `?beta=true`. Fully scoped:
+  - GET  .../ApacheAirflowJobs/{id}/files → Get-FabricApacheAirflowJobFile (list; add optional -FilePath for the by-path GET)
+  - GET  .../ApacheAirflowJobs/{id}/files/{filePath} → (same fn via -FilePath)
+  - PUT  .../ApacheAirflowJobs/{id}/files/{filePath} → Set-FabricApacheAirflowJobFile (octet-stream; {filePath} may contain '/')
+  - DELETE .../ApacheAirflowJobs/{id}/files/{filePath} → Remove-FabricApacheAirflowJobFile
+  - GET  .../apacheAirflowJobs/poolTemplates (+ /{poolTemplateId}) → Get-FabricApacheAirflowPoolTemplate (list + by-id)
+  - POST .../apacheAirflowJobs/poolTemplates → New-FabricApacheAirflowPoolTemplate (body CreateAirflowPoolTemplateRequest:
+    name, nodeSize(ref NodeSize), computeScalability(ref ComputeScalability), apacheAirflowJobVersion — all required)
+  - DELETE .../apacheAirflowJobs/poolTemplates/{poolTemplateId} → Remove-FabricApacheAirflowPoolTemplate
+  - GET  .../apacheAirflowJobs/settings → Get-FabricApacheAirflowSetting
+  - PATCH .../apacheAirflowJobs/settings → Update-FabricApacheAirflowSetting (body {defaultPoolTemplateId})
+  Note: {filePath} with embedded slashes — build with -Segments and pass the raw path, or append to the URI string.
+  Get NodeSize/ComputeScalability enums from apacheAirflowJob.definitions.json before writing New-...PoolTemplate.
 - ☑ **C7 lakehouse RefreshMaterializedLakeViews schedules** — New/Update/Remove (3 fns, tests, CHANGELOG; build pending)
 - ◐ **C8 admin** — DONE the 2 genuine: Get-FabricDomainRoleAssignment + Sync-FabricDomainRoleAssignment.
   False-negatives confirmed: bulkAssign (Add-FabricDomainWorkspaceByRoleAssignment), unassignWorkspaces +
