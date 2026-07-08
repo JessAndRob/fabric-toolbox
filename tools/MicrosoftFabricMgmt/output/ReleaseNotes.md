@@ -2,6 +2,13 @@
 
 ### Added
 
+- **Apache Airflow job management** (8 new, preview): file operations
+  `Get`/`Set`/`Remove-FabricApacheAirflowJobFile` (list/get, octet-stream upload, delete under
+  `.../ApacheAirflowJobs/{id}/files/{filePath}`), pool templates
+  `Get`/`New`/`Remove-FabricApacheAirflowPoolTemplate`
+  (`.../apacheAirflowJobs/poolTemplates`; create takes `-NodeSize` Small/Large + `-MinNodeCount`/`-MaxNodeCount`
+  + `-ApacheAirflowJobVersion`), and workspace settings `Get`/`Update-FabricApacheAirflowSetting`
+  (`.../apacheAirflowJobs/settings`, `-DefaultPoolTemplateId`). All send `?beta=true`.
 - **Environment external libraries** (3 new): `Export-FabricEnvironmentExternalLibrary`
   (GET published, or `-Staging` for staging, `exportExternalLibraries`),
   `Import-FabricEnvironmentStagingExternalLibrary` (POST `importExternalLibraries`, uploading a

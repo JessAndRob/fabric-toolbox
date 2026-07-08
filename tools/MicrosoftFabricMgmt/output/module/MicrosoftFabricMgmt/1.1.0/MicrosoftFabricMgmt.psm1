@@ -9171,6 +9171,266 @@ function Get-FabricApacheAirflowJobDefinition {
     }
 }
 #EndRegion '.\Public\Apache Airflow Job\Get-FabricApacheAirflowJobDefinition.ps1' 94
+#Region '.\Public\Apache Airflow Job\Get-FabricApacheAirflowJobFile.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists the files of a Fabric Apache Airflow job, or retrieves a single file's content. (Preview)
+
+.DESCRIPTION
+    The Get-FabricApacheAirflowJobFile function lists the files stored in an Apache Airflow job via
+    `GET /workspaces/{workspaceId}/ApacheAirflowJobs/{apacheAirflowJobId}/files`, or retrieves the
+    content of a single file via `GET .../files/{filePath}` when -FilePath is supplied. This is a
+    preview (beta) API.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the Apache Airflow job. Mandatory.
+
+.PARAMETER ApacheAirflowJobId
+    The unique identifier of the Apache Airflow job. Mandatory. Binds from the pipeline via the 'id'
+    alias.
+
+.PARAMETER FilePath
+    The path of a single file to retrieve (e.g. 'dags/my_dag.py'). When omitted, all files are listed.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    Get-FabricApacheAirflowJobFile -WorkspaceId $ws -ApacheAirflowJobId $job
+
+    Lists all files in the Apache Airflow job.
+
+.EXAMPLE
+    Get-FabricApacheAirflowJobFile -WorkspaceId $ws -ApacheAirflowJobId $job -FilePath 'dags/my_dag.py'
+
+    Retrieves the content of the specified file.
+
+.OUTPUTS
+    System.Object
+    The file listing, or the requested file's content.
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/ApacheAirflowJobs/{apacheAirflowJobId}/files (+ /{filePath}) (preview)
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricApacheAirflowJobFile {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ApacheAirflowJobId,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$FilePath,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $segments = @('workspaces', $WorkspaceId, 'ApacheAirflowJobs', $ApacheAirflowJobId, 'files')
+            if ($FilePath) { $segments += $FilePath }
+            $apiEndpointURI = New-FabricAPIUri -Segments $segments -QueryParameters @{ beta = 'true' }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if ($Raw) {
+                return $response
+            }
+
+            Write-FabricLog -Message "Files retrieved for Apache Airflow job '$ApacheAirflowJobId'." -Level Debug
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve files for Apache Airflow job '$ApacheAirflowJobId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Apache Airflow Job\Get-FabricApacheAirflowJobFile.ps1' 93
+#Region '.\Public\Apache Airflow Job\Get-FabricApacheAirflowPoolTemplate.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists the Apache Airflow pool templates in a Fabric workspace, or retrieves one by id. (Preview)
+
+.DESCRIPTION
+    The Get-FabricApacheAirflowPoolTemplate function lists the Apache Airflow pool templates via
+    `GET /workspaces/{workspaceId}/apacheAirflowJobs/poolTemplates`, or retrieves a single template
+    via `GET .../poolTemplates/{poolTemplateId}` when -PoolTemplateId is supplied. This is a preview
+    (beta) API.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER PoolTemplateId
+    The unique identifier of a single pool template to retrieve. When omitted, all templates are listed.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    Get-FabricApacheAirflowPoolTemplate -WorkspaceId $ws
+
+    Lists all Apache Airflow pool templates in the workspace.
+
+.EXAMPLE
+    Get-FabricApacheAirflowPoolTemplate -WorkspaceId $ws -PoolTemplateId $pt
+
+    Retrieves the specified pool template.
+
+.OUTPUTS
+    System.Object
+    Pool template object(s) with all API-returned properties (id, name, nodeSize, shutdownPolicy,
+    computeScalability, apacheAirflowJobVersion).
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/apacheAirflowJobs/poolTemplates (+ /{poolTemplateId}) (preview)
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricApacheAirflowPoolTemplate {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WorkspaceId,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$PoolTemplateId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $segments = @('workspaces', $WorkspaceId, 'apacheAirflowJobs', 'poolTemplates')
+            if ($PoolTemplateId) { $segments += $PoolTemplateId }
+            $apiEndpointURI = New-FabricAPIUri -Segments $segments -QueryParameters @{ beta = 'true' }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No Apache Airflow pool templates found for workspace '$WorkspaceId'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.AirflowPoolTemplate'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve Apache Airflow pool templates for workspace '$WorkspaceId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Apache Airflow Job\Get-FabricApacheAirflowPoolTemplate.ps1' 91
+#Region '.\Public\Apache Airflow Job\Get-FabricApacheAirflowSetting.ps1' -1
+
+<#
+.SYNOPSIS
+    Retrieves the Apache Airflow workspace settings. (Preview)
+
+.DESCRIPTION
+    The Get-FabricApacheAirflowSetting function retrieves the workspace-level Apache Airflow settings
+    via `GET /workspaces/{workspaceId}/apacheAirflowJobs/settings`, including the default pool
+    template. This is a preview (beta) API.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    Get-FabricApacheAirflowSetting -WorkspaceId $ws
+
+    Returns the workspace's Apache Airflow settings.
+
+.OUTPUTS
+    System.Object
+    The Apache Airflow workspace settings object (defaultPoolTemplateId).
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/apacheAirflowJobs/settings (preview)
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricApacheAirflowSetting {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WorkspaceId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'apacheAirflowJobs', 'settings') -QueryParameters @{ beta = 'true' }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if ($Raw) {
+                return $response
+            }
+
+            Write-FabricLog -Message "Apache Airflow settings retrieved for workspace '$WorkspaceId'." -Level Debug
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve Apache Airflow settings for workspace '$WorkspaceId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Apache Airflow Job\Get-FabricApacheAirflowSetting.ps1' 70
 #Region '.\Public\Apache Airflow Job\New-FabricApacheAirflowJob.ps1' -1
 
 <#
@@ -9320,6 +9580,115 @@ function New-FabricApacheAirflowJob {
     }
 }
 #EndRegion '.\Public\Apache Airflow Job\New-FabricApacheAirflowJob.ps1' 147
+#Region '.\Public\Apache Airflow Job\New-FabricApacheAirflowPoolTemplate.ps1' -1
+
+<#
+.SYNOPSIS
+    Creates an Apache Airflow pool template in a Fabric workspace. (Preview)
+
+.DESCRIPTION
+    The New-FabricApacheAirflowPoolTemplate function creates a pool template via
+    `POST /workspaces/{workspaceId}/apacheAirflowJobs/poolTemplates`. This is a preview (beta) API.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Name
+    The name of the pool template. Mandatory.
+
+.PARAMETER NodeSize
+    The node size for the pool: Small or Large. Mandatory.
+
+.PARAMETER MinNodeCount
+    The minimum number of nodes for autoscaling. Mandatory.
+
+.PARAMETER MaxNodeCount
+    The maximum number of nodes for autoscaling. Mandatory.
+
+.PARAMETER ApacheAirflowJobVersion
+    The Apache Airflow version for the pool template. Mandatory.
+
+.EXAMPLE
+    New-FabricApacheAirflowPoolTemplate -WorkspaceId $ws -Name 'default' -NodeSize Small -MinNodeCount 1 -MaxNodeCount 3 -ApacheAirflowJobVersion '2.9.3'
+
+    Creates a small autoscaling pool template.
+
+.OUTPUTS
+    System.Object
+    The created pool template object.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/apacheAirflowJobs/poolTemplates (preview)
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function New-FabricApacheAirflowPoolTemplate {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Small', 'Large')]
+        [string]$NodeSize,
+
+        [Parameter(Mandatory = $true)]
+        [int]$MinNodeCount,
+
+        [Parameter(Mandatory = $true)]
+        [int]$MaxNodeCount,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ApacheAirflowJobVersion
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'apacheAirflowJobs', 'poolTemplates') -QueryParameters @{ beta = 'true' }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                name                    = $Name
+                nodeSize                = $NodeSize
+                computeScalability      = @{
+                    minNodeCount = $MinNodeCount
+                    maxNodeCount = $MaxNodeCount
+                }
+                apacheAirflowJobVersion = $ApacheAirflowJobVersion
+            }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Workspace '$WorkspaceId'", "Create Apache Airflow pool template '$Name'")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Apache Airflow pool template '$Name' created in workspace '$WorkspaceId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to create Apache Airflow pool template '$Name'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Apache Airflow Job\New-FabricApacheAirflowPoolTemplate.ps1' 107
 #Region '.\Public\Apache Airflow Job\Remove-FabricApacheAirflowJob.ps1' -1
 
 <#
@@ -9387,6 +9756,244 @@ function Remove-FabricApacheAirflowJob {
     }
 }
 #EndRegion '.\Public\Apache Airflow Job\Remove-FabricApacheAirflowJob.ps1' 65
+#Region '.\Public\Apache Airflow Job\Remove-FabricApacheAirflowJobFile.ps1' -1
+
+<#
+.SYNOPSIS
+    Removes a file from a Fabric Apache Airflow job. (Preview)
+
+.DESCRIPTION
+    The Remove-FabricApacheAirflowJobFile function deletes a file from an Apache Airflow job via
+    `DELETE /workspaces/{workspaceId}/ApacheAirflowJobs/{apacheAirflowJobId}/files/{filePath}`. This
+    is a preview (beta) API.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the Apache Airflow job. Mandatory.
+
+.PARAMETER ApacheAirflowJobId
+    The unique identifier of the Apache Airflow job. Mandatory. Binds from the pipeline via the 'id'
+    alias.
+
+.PARAMETER FilePath
+    The path of the file to remove (e.g. 'dags/my_dag.py'). Mandatory.
+
+.EXAMPLE
+    Remove-FabricApacheAirflowJobFile -WorkspaceId $ws -ApacheAirflowJobId $job -FilePath 'dags/my_dag.py'
+
+    Deletes the specified file from the job.
+
+.OUTPUTS
+    None.
+
+.NOTES
+    - API Endpoint: DELETE /workspaces/{workspaceId}/ApacheAirflowJobs/{apacheAirflowJobId}/files/{filePath} (preview)
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricApacheAirflowJobFile {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ApacheAirflowJobId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$FilePath
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'ApacheAirflowJobs', $ApacheAirflowJobId, 'files', $FilePath) -QueryParameters @{ beta = 'true' }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            if ($PSCmdlet.ShouldProcess("File '$FilePath' on Apache Airflow job '$ApacheAirflowJobId'", "Delete")) {
+                $apiParams = @{
+                    BaseURI = $apiEndpointURI
+                    Headers = $script:FabricAuthContext.FabricHeaders
+                    Method  = 'Delete'
+                }
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "File '$FilePath' removed from Apache Airflow job '$ApacheAirflowJobId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to remove file '$FilePath' from Apache Airflow job '$ApacheAirflowJobId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Apache Airflow Job\Remove-FabricApacheAirflowJobFile.ps1' 75
+#Region '.\Public\Apache Airflow Job\Remove-FabricApacheAirflowPoolTemplate.ps1' -1
+
+<#
+.SYNOPSIS
+    Removes an Apache Airflow pool template from a Fabric workspace. (Preview)
+
+.DESCRIPTION
+    The Remove-FabricApacheAirflowPoolTemplate function deletes a pool template via
+    `DELETE /workspaces/{workspaceId}/apacheAirflowJobs/poolTemplates/{poolTemplateId}`. This is a
+    preview (beta) API.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace. Mandatory.
+
+.PARAMETER PoolTemplateId
+    The unique identifier of the pool template to remove. Mandatory. Binds from the pipeline via the
+    'id' alias.
+
+.EXAMPLE
+    Remove-FabricApacheAirflowPoolTemplate -WorkspaceId $ws -PoolTemplateId $pt
+
+    Deletes the specified pool template.
+
+.OUTPUTS
+    None.
+
+.NOTES
+    - API Endpoint: DELETE /workspaces/{workspaceId}/apacheAirflowJobs/poolTemplates/{poolTemplateId} (preview)
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricApacheAirflowPoolTemplate {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$PoolTemplateId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'apacheAirflowJobs', 'poolTemplates', $PoolTemplateId) -QueryParameters @{ beta = 'true' }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            if ($PSCmdlet.ShouldProcess("Pool template '$PoolTemplateId' in workspace '$WorkspaceId'", "Delete")) {
+                $apiParams = @{
+                    BaseURI = $apiEndpointURI
+                    Headers = $script:FabricAuthContext.FabricHeaders
+                    Method  = 'Delete'
+                }
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Apache Airflow pool template '$PoolTemplateId' removed from workspace '$WorkspaceId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to remove Apache Airflow pool template '$PoolTemplateId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Apache Airflow Job\Remove-FabricApacheAirflowPoolTemplate.ps1' 68
+#Region '.\Public\Apache Airflow Job\Set-FabricApacheAirflowJobFile.ps1' -1
+
+<#
+.SYNOPSIS
+    Creates or updates a file in a Fabric Apache Airflow job. (Preview)
+
+.DESCRIPTION
+    The Set-FabricApacheAirflowJobFile function uploads a file to an Apache Airflow job at the given
+    path via `PUT /workspaces/{workspaceId}/ApacheAirflowJobs/{apacheAirflowJobId}/files/{filePath}`.
+    The file content is sent as an application/octet-stream body. This is a preview (beta) API.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the Apache Airflow job. Mandatory.
+
+.PARAMETER ApacheAirflowJobId
+    The unique identifier of the Apache Airflow job. Mandatory. Binds from the pipeline via the 'id'
+    alias.
+
+.PARAMETER FilePath
+    The destination path of the file within the job (e.g. 'dags/my_dag.py'). Mandatory.
+
+.PARAMETER SourceFile
+    The path to the local file whose content is uploaded. Mandatory. The file must exist.
+
+.EXAMPLE
+    Set-FabricApacheAirflowJobFile -WorkspaceId $ws -ApacheAirflowJobId $job -FilePath 'dags/my_dag.py' -SourceFile .\my_dag.py
+
+    Uploads my_dag.py to dags/my_dag.py in the job.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: PUT /workspaces/{workspaceId}/ApacheAirflowJobs/{apacheAirflowJobId}/files/{filePath} (preview)
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Set-FabricApacheAirflowJobFile {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ApacheAirflowJobId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$FilePath,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [ValidateScript({ Test-Path -Path $_ -PathType Leaf })]
+        [string]$SourceFile
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'ApacheAirflowJobs', $ApacheAirflowJobId, 'files', $FilePath) -QueryParameters @{ beta = 'true' }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $fileContent = Get-Content -Path $SourceFile -Raw
+
+            $apiParams = @{
+                BaseURI     = $apiEndpointURI
+                Headers     = $script:FabricAuthContext.FabricHeaders
+                Method      = 'Put'
+                Body        = $fileContent
+                ContentType = 'application/octet-stream'
+            }
+
+            if ($PSCmdlet.ShouldProcess("File '$FilePath' on Apache Airflow job '$ApacheAirflowJobId'", "Create or update")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "File '$FilePath' uploaded to Apache Airflow job '$ApacheAirflowJobId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to upload file '$FilePath' to Apache Airflow job '$ApacheAirflowJobId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Apache Airflow Job\Set-FabricApacheAirflowJobFile.ps1' 89
 #Region '.\Public\Apache Airflow Job\Update-FabricApacheAirflowJob.ps1' -1
 
 <#
@@ -9636,6 +10243,81 @@ function Update-FabricApacheAirflowJobDefinition {
 }
 }
 #EndRegion '.\Public\Apache Airflow Job\Update-FabricApacheAirflowJobDefinition.ps1' 143
+#Region '.\Public\Apache Airflow Job\Update-FabricApacheAirflowSetting.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates the Apache Airflow workspace settings. (Preview)
+
+.DESCRIPTION
+    The Update-FabricApacheAirflowSetting function updates the workspace-level Apache Airflow settings
+    via `PATCH /workspaces/{workspaceId}/apacheAirflowJobs/settings`. This is a preview (beta) API.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER DefaultPoolTemplateId
+    The unique identifier of the pool template to set as the workspace default. Mandatory.
+
+.EXAMPLE
+    Update-FabricApacheAirflowSetting -WorkspaceId $ws -DefaultPoolTemplateId $pt
+
+    Sets the workspace's default Apache Airflow pool template.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: PATCH /workspaces/{workspaceId}/apacheAirflowJobs/settings (preview)
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricApacheAirflowSetting {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DefaultPoolTemplateId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'apacheAirflowJobs', 'settings') -QueryParameters @{ beta = 'true' }
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ defaultPoolTemplateId = $DefaultPoolTemplateId }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Patch'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Workspace '$WorkspaceId'", "Update Apache Airflow settings")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Apache Airflow settings updated for workspace '$WorkspaceId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update Apache Airflow settings for workspace '$WorkspaceId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Apache Airflow Job\Update-FabricApacheAirflowSetting.ps1' 73
 #Region '.\Public\Capacity\Get-FabricCapacity.ps1' -1
 
 

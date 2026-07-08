@@ -136,7 +136,8 @@ Get-FabricOneLakeShortcut (shortcuts/{path}/{name}), Get-FabricDomain (/domains 
   (verify import/remove staging first): GET libraries/exportExternalLibraries, GET staging/libraries/exportExternalLibraries,
   POST staging/libraries/importExternalLibraries, POST staging/libraries/removeExternalLibrary.
   (POST/DELETE staging/libraries/{libraryName} are likely false-negatives of Import/Remove-FabricEnvironmentStagingLibrary.)
-- ☐ **C6 apacheAirflowJob (beta)** — 10 ep, ~8 fns, none covered. ALL need `?beta=true`. Fully scoped:
+- ☑ **C6 apacheAirflowJob (beta)** — Get/Set/Remove-FabricApacheAirflowJobFile, Get/New/Remove-FabricApacheAirflowPoolTemplate,
+  Get/Update-FabricApacheAirflowSetting (8 fns / 10 ep, tests, CHANGELOG; build pending). Details:
   - GET  .../ApacheAirflowJobs/{id}/files → Get-FabricApacheAirflowJobFile (list; add optional -FilePath for the by-path GET)
   - GET  .../ApacheAirflowJobs/{id}/files/{filePath} → (same fn via -FilePath)
   - PUT  .../ApacheAirflowJobs/{id}/files/{filePath} → Set-FabricApacheAirflowJobFile (octet-stream; {filePath} may contain '/')
