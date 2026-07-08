@@ -98,7 +98,28 @@ Notes:
 
 All with behavior tests + CHANGELOG (Added + Fixed).
 
-## Bucket C — Per-resource  ◐ in progress
+## Bucket C — Per-resource  ☑ COMPLETE (except deferred nltokql)
+
+**Fabric coverage now 96.7% (530/548).** The remaining 18 uncovered Fabric endpoints are all
+accounted for — NOT genuine gaps:
+
+**Confirmed false-negatives (covered; validator can't parse the URI shape):**
+Start-FabricDataflowJob (dataflows Execute/ApplyChanges instances ×2), Start-FabricLakehouseRefreshMaterializedLakeView
++ Start-FabricLakehouseTableMaintenance (lakehouse instances ×2), Start-FabricSparkJobDefinitionOnDemand
+(sparkjob instances), Update-FabricVariableLibraryDefinition (VariableLibraries updateDefinition),
+Disable-FabricMLModelEndpointVersion -All (deactivateAll), Remove-FabricDomainWorkspace (unassignWorkspaces +
+unassignAllWorkspaces), Import/Remove-FabricEnvironmentStagingLibrary (staging/libraries/{libraryName} POST+DELETE),
+Get-FabricDomain (/domains → admin/domains), Get-FabricLongRunningOperation (/operations/{id}),
+Get-FabricOneLakeShortcut (shortcuts/{path}/{name}).
+
+**Deferred:** GET /realtimeintelligence/nltokql (beta; a required NlToKqlRequest **body on a GET** — needs
+careful handling; itemIdForBilling/clusterUrl/naturalLanguage/databaseName).
+
+**Ambiguous (left as-is):** POST /capacities/{id}/delegatedTenantSettingOverrides/{name}/update — existing
+Update-FabricCapacityTenantSettingOverrides POSTs to `.../delegatedTenantSettingOverrides` (no /{name}/update);
+verify against the live API before changing.
+
+### Batches delivered (all committed + green):
 
 After a 3rd validator fix (case-insensitive `-replace`, +11) **Fabric coverage is 90.1% (494/548)**.
 The remaining-missing list is now trustworthy. Genuine gaps (false-negatives excluded):

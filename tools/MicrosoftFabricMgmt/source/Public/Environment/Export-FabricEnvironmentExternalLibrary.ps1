@@ -65,13 +65,12 @@ function Export-FabricEnvironmentExternalLibrary {
         try {
             Invoke-FabricAuthCheck -ThrowOnFailure
 
-            $segments = if ($Staging) {
-                @('workspaces', $WorkspaceId, 'environments', $EnvironmentId, 'staging', 'libraries', 'exportExternalLibraries')
+            $apiEndpointURI = if ($Staging) {
+                New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'environments', $EnvironmentId, 'staging', 'libraries', 'exportExternalLibraries')
             }
             else {
-                @('workspaces', $WorkspaceId, 'environments', $EnvironmentId, 'libraries', 'exportExternalLibraries')
+                New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'environments', $EnvironmentId, 'libraries', 'exportExternalLibraries')
             }
-            $apiEndpointURI = New-FabricAPIUri -Segments $segments
             Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
 
             $apiParams = @{
