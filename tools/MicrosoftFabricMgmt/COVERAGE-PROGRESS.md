@@ -193,7 +193,35 @@ Get-FabricOneLakeShortcut (shortcuts/{path}/{name}), Get-FabricDomain (/domains 
   - ☐ realTimeIntelligence **nltokql** (beta) — DEFERRED: GET /realtimeintelligence/nltokql with a required
     NlToKqlRequest **body on a GET** (itemIdForBilling, clusterUrl, naturalLanguage, databaseName) — awkward
     shape, handle carefully in its own pass.
-## Bucket E — Power BI Admin + Gateways (15)  ☐ (not started)
+## Bucket E — Power BI Admin + Gateways (15)  ◐ gateways done
+
+**Gateways (7) DONE** — New/Update/Remove-FabricAdminGatewayDatasource, Get-FabricAdminGatewayDatasourceStatus,
+Get/Add/Remove-FabricAdminGatewayDatasourceUser (7 fns, tests, CHANGELOG; build pending). Power BI base URL.
+**Admin (8) remain = mostly false-negatives / ambiguous** (see below) — verify vs live API before adding.
+
+Power BI in-scope 55/70 (78.6%). The 15 missing split into:
+
+**Gateways (7) — GENUINE (only Get list + by-id datasource exist). Power BI classic gateway datasource mgmt:**
+- POST   /v1.0/myorg/gateways/{gatewayId}/datasources → New-FabricAdminGatewayDatasource (body PublishDatasourceToGatewayRequest)
+- PATCH  /gateways/{id}/datasources/{dsId} → Update-FabricAdminGatewayDatasource
+- DELETE /gateways/{id}/datasources/{dsId} → Remove-FabricAdminGatewayDatasource
+- GET    /gateways/{id}/datasources/{dsId}/status → Get-FabricAdminGatewayDatasourceStatus
+- GET    /gateways/{id}/datasources/{dsId}/users → Get-FabricAdminGatewayDatasourceUser
+- POST   /gateways/{id}/datasources/{dsId}/users → Add-FabricAdminGatewayDatasourceUser
+- DELETE /gateways/{id}/datasources/{dsId}/users/{emailAdress} → Remove-FabricAdminGatewayDatasourceUser
+  (schemas: pull from powerbi spec cache — PublishDatasourceToGatewayRequest, UpdateDatasourceRequest,
+  DatasourceUser/GatewayDatasourceUser, add-user body.)
+
+**Admin (8) — mostly false-negatives / ambiguous (verify vs live API before adding):**
+- POST /admin/groups/{id}/restore → Restore-FabricAdminWorkspace ✓ (false-neg)
+- POST /admin/tenantKeys/{id}/Default.Rotate → Start-FabricAdminEncryptionKeyRotation ✓ (false-neg)
+- GET  /admin/groups/{id}/unused → Get-FabricAdminWorkspaceUnusedArtifact (targets /UnusedArtifacts — same op) ✓
+- GET  /admin/groups/{id}/users → Get-FabricAdminWorkspaceUser (likely) ✓
+- GET  /admin/groups (+ /{id}) → Get-FabricAdminWorkspace (likely) — verify path
+- POST /admin/capacities/AssignWorkspaces + UnassignWorkspaces → AMBIGUOUS: existing
+  Add-FabricAdminCapacityWorkspace hits `/capacities/{capacityId}/AssignWorkspaces` and
+  Remove-FabricAdminCapacityWorkspace hits `/capacities/UnassignWorkspacesFromCapacity` — different
+  endpoint variants; confirm whether the bulk `/admin/capacities/(Un)AssignWorkspaces` forms are needed.
 ## Bucket F — Legacy Power BI (~216)  ⊘ pending scope confirmation from user
 
 ---

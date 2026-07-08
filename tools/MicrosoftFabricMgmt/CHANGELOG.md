@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Power BI gateway datasource management** (7 new): `New`/`Update`/`Remove-FabricAdminGatewayDatasource`
+  (publish/update-credentials/delete a datasource on an on-premises gateway),
+  `Get-FabricAdminGatewayDatasourceStatus` (connectivity check), and
+  `Get`/`Add`/`Remove-FabricAdminGatewayDatasourceUser` (datasource user access). These call the
+  Power BI REST API (`https://api.powerbi.com/v1.0/myorg/gateways/{id}/datasources/...`).
 - **Apache Airflow job management** (8 new, preview): file operations
   `Get`/`Set`/`Remove-FabricApacheAirflowJobFile` (list/get, octet-stream upload, delete under
   `.../ApacheAirflowJobs/{id}/files/{filePath}`), pool templates

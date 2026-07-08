@@ -1394,6 +1394,115 @@ function Add-FabricAdminCapacityWorkspace {
     }
 }
 #EndRegion '.\Public\Admin\Add-FabricAdminCapacityWorkspace.ps1' 70
+#Region '.\Public\Admin\Add-FabricAdminGatewayDatasourceUser.ps1' -1
+
+<#
+.SYNOPSIS
+    Grants a user access to a Power BI gateway datasource.
+
+.DESCRIPTION
+    The Add-FabricAdminGatewayDatasourceUser function grants a principal an access right on a gateway
+    datasource via
+    `POST https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}/users`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway. Mandatory.
+
+.PARAMETER DatasourceId
+    The unique identifier of the datasource. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER DatasourceAccessRight
+    The access right to grant: None, Read, or ReadOverrideEffectiveIdentity. Mandatory.
+
+.PARAMETER EmailAddress
+    The email address of the user to grant access to.
+
+.PARAMETER Identifier
+    The object identifier of the principal (used for groups / service principals).
+
+.PARAMETER PrincipalType
+    The principal type: App, Group, None, or User.
+
+.EXAMPLE
+    Add-FabricAdminGatewayDatasourceUser -GatewayId $gw -DatasourceId $ds -DatasourceAccessRight Read -EmailAddress user@contoso.com
+
+    Grants the user Read access to the datasource.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}/users
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Add-FabricAdminGatewayDatasourceUser {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$DatasourceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('None', 'Read', 'ReadOverrideEffectiveIdentity')]
+        [string]$DatasourceAccessRight,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$EmailAddress,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$Identifier,
+
+        [Parameter()]
+        [ValidateSet('App', 'Group', 'None', 'User')]
+        [string]$PrincipalType
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $powerBIBaseUrl = "https://api.powerbi.com/v1.0/myorg"
+            $apiEndpointURI = "$powerBIBaseUrl/gateways/$GatewayId/datasources/$DatasourceId/users"
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ datasourceAccessRight = $DatasourceAccessRight }
+            if ($PSBoundParameters.ContainsKey('EmailAddress')) { $body.emailAddress = $EmailAddress }
+            if ($PSBoundParameters.ContainsKey('Identifier')) { $body.identifier = $Identifier }
+            if ($PSBoundParameters.ContainsKey('PrincipalType')) { $body.principalType = $PrincipalType }
+
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Datasource '$DatasourceId' on gateway '$GatewayId'", "Grant '$DatasourceAccessRight' access")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Access granted on datasource '$DatasourceId' (gateway '$GatewayId')." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to grant access on datasource '$DatasourceId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Admin\Add-FabricAdminGatewayDatasourceUser.ps1' 107
 #Region '.\Public\Admin\Add-FabricAdminPipelineUser.ps1' -1
 
 <#
@@ -4426,6 +4535,166 @@ function Get-FabricAdminGatewayDatasourceById {
     }
 }
 #EndRegion '.\Public\Admin\Get-FabricAdminGatewayDatasourceById.ps1' 160
+#Region '.\Public\Admin\Get-FabricAdminGatewayDatasourceStatus.ps1' -1
+
+<#
+.SYNOPSIS
+    Gets the connectivity status of a Power BI gateway datasource.
+
+.DESCRIPTION
+    The Get-FabricAdminGatewayDatasourceStatus function checks the connectivity status of a gateway
+    datasource via
+    `GET https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}/status`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway. Mandatory.
+
+.PARAMETER DatasourceId
+    The unique identifier of the datasource. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    Get-FabricAdminGatewayDatasourceStatus -GatewayId $gw -DatasourceId $ds
+
+    Returns the datasource's connectivity status.
+
+.OUTPUTS
+    System.Object
+    The datasource connectivity status.
+
+.NOTES
+    - API Endpoint: GET https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}/status
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricAdminGatewayDatasourceStatus {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$DatasourceId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $powerBIBaseUrl = "https://api.powerbi.com/v1.0/myorg"
+            $apiEndpointURI = "$powerBIBaseUrl/gateways/$GatewayId/datasources/$DatasourceId/status"
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if ($Raw) {
+                return $response
+            }
+
+            Write-FabricLog -Message "Status retrieved for datasource '$DatasourceId' on gateway '$GatewayId'." -Level Debug
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve status for datasource '$DatasourceId' on gateway '$GatewayId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Admin\Get-FabricAdminGatewayDatasourceStatus.ps1' 78
+#Region '.\Public\Admin\Get-FabricAdminGatewayDatasourceUser.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists the users of a Power BI gateway datasource.
+
+.DESCRIPTION
+    The Get-FabricAdminGatewayDatasourceUser function retrieves the users that have access to a
+    gateway datasource via
+    `GET https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}/users`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway. Mandatory.
+
+.PARAMETER DatasourceId
+    The unique identifier of the datasource. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response.
+
+.EXAMPLE
+    Get-FabricAdminGatewayDatasourceUser -GatewayId $gw -DatasourceId $ds
+
+    Lists the users with access to the datasource.
+
+.OUTPUTS
+    System.Object
+    The datasource user object(s).
+
+.NOTES
+    - API Endpoint: GET https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}/users
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricAdminGatewayDatasourceUser {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$DatasourceId,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $powerBIBaseUrl = "https://api.powerbi.com/v1.0/myorg"
+            $apiEndpointURI = "$powerBIBaseUrl/gateways/$GatewayId/datasources/$DatasourceId/users"
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if ($Raw) {
+                return $response
+            }
+
+            Write-FabricLog -Message "Users retrieved for datasource '$DatasourceId' on gateway '$GatewayId'." -Level Debug
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve users for datasource '$DatasourceId' on gateway '$GatewayId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Admin\Get-FabricAdminGatewayDatasourceUser.ps1' 78
 #Region '.\Public\Admin\Get-FabricAdminGatewayInventory.ps1' -1
 
 <#
@@ -7455,6 +7724,109 @@ function New-FabricAdminEncryptionKey {
     }
 }
 #EndRegion '.\Public\Admin\New-FabricAdminEncryptionKey.ps1' 64
+#Region '.\Public\Admin\New-FabricAdminGatewayDatasource.ps1' -1
+
+<#
+.SYNOPSIS
+    Creates (publishes) a datasource on a Power BI on-premises gateway.
+
+.DESCRIPTION
+    The New-FabricAdminGatewayDatasource function publishes a new datasource to a gateway via
+    `POST https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER DataSourceType
+    The datasource type (e.g. 'SQL', 'Web'). Mandatory.
+
+.PARAMETER ConnectionDetails
+    The connection details as a JSON string (e.g. '{"server":"srv","database":"db"}'). Mandatory.
+
+.PARAMETER CredentialDetails
+    A hashtable of credential details (credentialType, credentials, encryptedConnection,
+    encryptionAlgorithm, privacyLevel, etc.). Mandatory.
+
+.PARAMETER DataSourceName
+    The display name for the datasource. Mandatory.
+
+.EXAMPLE
+    New-FabricAdminGatewayDatasource -GatewayId $gw -DataSourceType SQL -ConnectionDetails '{"server":"s","database":"d"}' -CredentialDetails $cred -DataSourceName 'Prod SQL'
+
+    Publishes a SQL datasource to the gateway.
+
+.OUTPUTS
+    System.Object
+    The created datasource object.
+
+.NOTES
+    - API Endpoint: POST https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function New-FabricAdminGatewayDatasource {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DataSourceType,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ConnectionDetails,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable]$CredentialDetails,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DataSourceName
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $powerBIBaseUrl = "https://api.powerbi.com/v1.0/myorg"
+            $apiEndpointURI = "$powerBIBaseUrl/gateways/$GatewayId/datasources"
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                dataSourceType    = $DataSourceType
+                connectionDetails = $ConnectionDetails
+                credentialDetails = $CredentialDetails
+                dataSourceName    = $DataSourceName
+            }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Gateway '$GatewayId'", "Publish datasource '$DataSourceName'")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Datasource '$DataSourceName' published to gateway '$GatewayId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to publish datasource to gateway '$GatewayId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Admin\New-FabricAdminGatewayDatasource.ps1' 101
 #Region '.\Public\Admin\Remove-FabricAdminCapacityWorkspace.ps1' -1
 
 <#
@@ -7520,6 +7892,153 @@ function Remove-FabricAdminCapacityWorkspace {
     }
 }
 #EndRegion '.\Public\Admin\Remove-FabricAdminCapacityWorkspace.ps1' 63
+#Region '.\Public\Admin\Remove-FabricAdminGatewayDatasource.ps1' -1
+
+<#
+.SYNOPSIS
+    Removes a datasource from a Power BI on-premises gateway.
+
+.DESCRIPTION
+    The Remove-FabricAdminGatewayDatasource function deletes a datasource from a gateway via
+    `DELETE https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway. Mandatory.
+
+.PARAMETER DatasourceId
+    The unique identifier of the datasource to remove. Mandatory. Binds from the pipeline via the
+    'id' alias.
+
+.EXAMPLE
+    Remove-FabricAdminGatewayDatasource -GatewayId $gw -DatasourceId $ds
+
+    Deletes the datasource from the gateway.
+
+.OUTPUTS
+    None.
+
+.NOTES
+    - API Endpoint: DELETE https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricAdminGatewayDatasource {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$DatasourceId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $powerBIBaseUrl = "https://api.powerbi.com/v1.0/myorg"
+            $apiEndpointURI = "$powerBIBaseUrl/gateways/$GatewayId/datasources/$DatasourceId"
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            if ($PSCmdlet.ShouldProcess("Datasource '$DatasourceId' on gateway '$GatewayId'", "Delete")) {
+                $apiParams = @{
+                    BaseURI = $apiEndpointURI
+                    Headers = $script:FabricAuthContext.FabricHeaders
+                    Method  = 'Delete'
+                }
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Datasource '$DatasourceId' removed from gateway '$GatewayId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to remove datasource '$DatasourceId' from gateway '$GatewayId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Admin\Remove-FabricAdminGatewayDatasource.ps1' 68
+#Region '.\Public\Admin\Remove-FabricAdminGatewayDatasourceUser.ps1' -1
+
+<#
+.SYNOPSIS
+    Revokes a user's access to a Power BI gateway datasource.
+
+.DESCRIPTION
+    The Remove-FabricAdminGatewayDatasourceUser function removes a user's access from a gateway
+    datasource via
+    `DELETE https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}/users/{emailAdress}`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway. Mandatory.
+
+.PARAMETER DatasourceId
+    The unique identifier of the datasource. Mandatory.
+
+.PARAMETER EmailAddress
+    The email address (or identifier) of the user whose access is revoked. Mandatory.
+
+.EXAMPLE
+    Remove-FabricAdminGatewayDatasourceUser -GatewayId $gw -DatasourceId $ds -EmailAddress user@contoso.com
+
+    Revokes the user's access to the datasource.
+
+.OUTPUTS
+    None.
+
+.NOTES
+    - API Endpoint: DELETE https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}/users/{emailAdress}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricAdminGatewayDatasourceUser {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$DatasourceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$EmailAddress
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $powerBIBaseUrl = "https://api.powerbi.com/v1.0/myorg"
+            $apiEndpointURI = "$powerBIBaseUrl/gateways/$GatewayId/datasources/$DatasourceId/users/$EmailAddress"
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            if ($PSCmdlet.ShouldProcess("User '$EmailAddress' on datasource '$DatasourceId' (gateway '$GatewayId')", "Revoke access")) {
+                $apiParams = @{
+                    BaseURI = $apiEndpointURI
+                    Headers = $script:FabricAuthContext.FabricHeaders
+                    Method  = 'Delete'
+                }
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Access revoked for '$EmailAddress' on datasource '$DatasourceId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to revoke access for '$EmailAddress' on datasource '$DatasourceId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Admin\Remove-FabricAdminGatewayDatasourceUser.ps1' 75
 #Region '.\Public\Admin\Remove-FabricAdminInformationProtectionLabel.ps1' -1
 
 <#
@@ -8183,6 +8702,90 @@ function Update-FabricAdminCapacity {
     }
 }
 #EndRegion '.\Public\Admin\Update-FabricAdminCapacity.ps1' 83
+#Region '.\Public\Admin\Update-FabricAdminGatewayDatasource.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates the credentials of a datasource on a Power BI on-premises gateway.
+
+.DESCRIPTION
+    The Update-FabricAdminGatewayDatasource function updates a gateway datasource's credential details
+    via `PATCH https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}`.
+
+.PARAMETER GatewayId
+    The unique identifier of the gateway. Mandatory.
+
+.PARAMETER DatasourceId
+    The unique identifier of the datasource to update. Mandatory. Binds from the pipeline via the
+    'id' alias.
+
+.PARAMETER CredentialDetails
+    A hashtable of the new credential details. Mandatory.
+
+.EXAMPLE
+    Update-FabricAdminGatewayDatasource -GatewayId $gw -DatasourceId $ds -CredentialDetails $cred
+
+    Updates the datasource's stored credentials.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: PATCH https://api.powerbi.com/v1.0/myorg/gateways/{gatewayId}/datasources/{datasourceId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricAdminGatewayDatasource {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$GatewayId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$DatasourceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable]$CredentialDetails
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $powerBIBaseUrl = "https://api.powerbi.com/v1.0/myorg"
+            $apiEndpointURI = "$powerBIBaseUrl/gateways/$GatewayId/datasources/$DatasourceId"
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ credentialDetails = $CredentialDetails }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Patch'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Datasource '$DatasourceId' on gateway '$GatewayId'", "Update credentials")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Datasource '$DatasourceId' updated on gateway '$GatewayId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update datasource '$DatasourceId' on gateway '$GatewayId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Admin\Update-FabricAdminGatewayDatasource.ps1' 82
 #Region '.\Public\Admin\Update-FabricAdminPipelineUser.ps1' -1
 
 <#
