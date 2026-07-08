@@ -1,7 +1,19 @@
-## [1.1.0] - 2026-07-07
+## [1.1.0] - 2026-07-08
 
 ### Added
 
+- **Lakehouse Refresh Materialized Lake Views schedules** (3 new):
+  `New`/`Update`/`Remove-FabricLakehouseRefreshMaterializedLakeViewsSchedule`
+  (POST/PATCH/DELETE `.../lakehouses/{id}/jobs/RefreshMaterializedLakeViews/schedules[/{scheduleId}]`;
+  take `-Enabled` + `-Configuration`, support `-WhatIf`/`-Confirm`).
+- **`Set-FabricSemanticModelConnection`** (new): binds a semantic model to a connection via
+  POST `.../semanticModels/{id}/bindConnection` (`-ConnectionBinding` hashtable; `-WhatIf`/`-Confirm`).
+- **Azure Databricks catalog discovery** (4 new): `Get-FabricAzureDatabricksCatalog` /
+  `Get-FabricAzureDatabricksSchema` / `Get-FabricAzureDatabricksTable` (GET
+  `.../azuredatabricks/catalogs[/{catalog}/schemas[/{schema}/tables]]`, requiring a
+  `-DatabricksWorkspaceConnectionId`, auto-paginated) and
+  `Update-FabricMirroredAzureDatabricksCatalogMetadata` (POST `.../refreshCatalogMetadata`,
+  long-running). Getters enrich with `WorkspaceName` (+ CatalogName/SchemaName context) and honor `-Raw`.
 - **SQL audit commands** (6 new) for SQL endpoints and warehouses:
   `Get-FabricSQLEndpointSqlAudit` / `Update-FabricSQLEndpointSqlAudit` /
   `Set-FabricSQLEndpointSqlAuditActionsAndGroups` and the matching `*WarehouseSqlAudit*` trio
@@ -62,6 +74,10 @@
 
 ### Fixed
 
+- **`Update-FabricWarehouseSnapshot`** now targets the correct
+  `PATCH /workspaces/{workspaceId}/warehousesnapshots/{warehouseSnapshotId}` endpoint. It previously
+  built `.../warehouses/{WarehouseId}` from an undefined `$WarehouseId` variable, producing an
+  empty/incorrect URL that never updated the snapshot.
 - **`Get-FabricWorkspaceGitConnection`** now calls the per-workspace endpoint
   `GET /workspaces/{workspaceId}/git/connection` (returning that workspace's Git provider/sync/state)
   instead of duplicating the admin discovery endpoint. `WorkspaceId` is now mandatory and pipeline-

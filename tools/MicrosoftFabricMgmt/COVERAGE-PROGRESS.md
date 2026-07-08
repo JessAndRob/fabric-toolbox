@@ -120,7 +120,8 @@ Get-FabricOneLakeShortcut (shortcuts/{path}/{name}), Get-FabricDomain (/domains 
   - **DONE (source+tests+CHANGELOG written; combined build pending)**: Get/Update-FabricSQLEndpointSqlAudit,
     Set-FabricSQLEndpointSqlAuditActionsAndGroups, Get/Update-FabricWarehouseSqlAudit,
     Set-FabricWarehouseSqlAuditActionsAndGroups. Analyzer clean.
-- ☐ **C3 mirroredAzureDatabricksCatalog** — 4 fns. Scoped:
+- ☑ **C3 mirroredAzureDatabricksCatalog** — Get-FabricAzureDatabricksCatalog/Schema/Table +
+  Update-FabricMirroredAzureDatabricksCatalogMetadata (4 fns, tests, CHANGELOG; build pending):
   - GET /azuredatabricks/catalogs — query `databricksWorkspaceConnectionId` (req), continuationToken, maxResults → Get-FabricAzureDatabricksCatalog (resp DatabricksCatalogs)
   - GET /azuredatabricks/catalogs/{catalogName}/schemas → Get-FabricAzureDatabricksSchema (resp DatabricksSchemas)
   - GET /azuredatabricks/catalogs/{catalogName}/schemas/{schemaName}/tables → Get-FabricAzureDatabricksTable (resp DatabricksTables)
@@ -128,9 +129,22 @@ Get-FabricOneLakeShortcut (shortcuts/{path}/{name}), Get-FabricDomain (/domains 
 - ☐ **C4 dataflow** — executeQuery + ApplyChanges/Execute instances&schedules (5 ep; check Start-FabricItemJob/New-FabricItemSchedule generic coverage first)
 - ☐ **C5 environment libraries** — staging library upload/import/remove/delete + export external (6 ep)
 - ☐ **C6 apacheAirflowJob (beta)** — files (GET/PUT/DELETE/list) + poolTemplates (CRUD) + settings (GET/PATCH) (10 ep)
-- ☐ **C7 lakehouse RefreshMaterializedLakeViews schedules** — POST/PATCH/DELETE schedules (3 ep; instances already exist)
-- ☐ **C8 admin** — domains roleAssignments GET, syncToSubdomains, unassignAllWorkspaces, unassignWorkspaces, capacity delegatedTenantSettingOverrides update (5 ep)
-- ☐ **C9 singles** — mlModel deactivateAll, semanticModel bindConnection, realTimeIntelligence nltokql, warehouseSnapshot PATCH (4 fns)
+- ☑ **C7 lakehouse RefreshMaterializedLakeViews schedules** — New/Update/Remove (3 fns, tests, CHANGELOG; build pending)
+- ☐ **C8 admin** — 5 ep (all under `/admin/...`). **SPOT-CHECK for false-negatives first** — module has
+  Add-FabricDomainWorkspaceByRoleAssignment / Remove-FabricDomainWorkspaceRoleAssignment / Remove-FabricDomainWorkspace
+  which may already cover the bulk role-assign/unassign + unassignWorkspaces. Genuine candidates:
+  - GET /admin/domains/{id}/roleAssignments → Get-FabricDomainRoleAssignment (list) — check not present
+  - POST /admin/domains/{id}/roleAssignments/syncToSubdomains → Sync-FabricDomainRoleAssignment (body SyncRoleAssignmentsToSubdomainsRequest)
+  - POST /admin/domains/{id}/unassignAllWorkspaces → Remove-FabricDomainWorkspace -All? (no body)
+  - POST /admin/capacities/{id}/delegatedTenantSettingOverrides/{name}/update → Update-FabricCapacityTenantSettingOverride (body UpdateCapacityTenantSettingOverrideRequest)
+- ◐ **C9 singles** — reconciled:
+  - ☑ semanticModel bindConnection → **Set-FabricSemanticModelConnection** (new)
+  - ☑ warehouseSnapshot PATCH → **fixed Update-FabricWarehouseSnapshot** (was targeting /warehouses/ with an
+    undefined $WarehouseId var; now PATCH /warehousesnapshots/{id})
+  - ⊘ mlModel deactivateAll → FALSE-NEGATIVE (Disable-FabricMLModelEndpointVersion -All already covers it)
+  - ☐ realTimeIntelligence **nltokql** (beta) — DEFERRED: GET /realtimeintelligence/nltokql with a required
+    NlToKqlRequest **body on a GET** (itemIdForBilling, clusterUrl, naturalLanguage, databaseName) — awkward
+    shape, handle carefully in its own pass.
 ## Bucket E — Power BI Admin + Gateways (15)  ☐ (not started)
 ## Bucket F — Legacy Power BI (~216)  ⊘ pending scope confirmation from user
 

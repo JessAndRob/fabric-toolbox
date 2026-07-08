@@ -31596,6 +31596,100 @@ function New-FabricLakehouse {
     }
 }
 #EndRegion '.\Public\Lakehouse\New-FabricLakehouse.ps1' 104
+#Region '.\Public\Lakehouse\New-FabricLakehouseRefreshMaterializedLakeViewsSchedule.ps1' -1
+
+<#
+.SYNOPSIS
+    Creates a schedule for the Refresh Materialized Lake Views job of a Fabric lakehouse.
+
+.DESCRIPTION
+    The New-FabricLakehouseRefreshMaterializedLakeViewsSchedule function creates a schedule for the
+    lakehouse RefreshMaterializedLakeViews background job via
+    `POST /workspaces/{workspaceId}/lakehouses/{lakehouseId}/jobs/RefreshMaterializedLakeViews/schedules`.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the lakehouse. Mandatory.
+
+.PARAMETER LakehouseId
+    The unique identifier of the lakehouse. Mandatory. Binds from the pipeline via the 'id' alias.
+
+.PARAMETER Enabled
+    Whether the schedule is enabled. Mandatory.
+
+.PARAMETER Configuration
+    The schedule configuration hashtable (e.g. @{ type = 'Cron'; startDateTime = ...; endDateTime = ...;
+    localTimeZoneId = ...; interval = ... }). Mandatory.
+
+.EXAMPLE
+    $cfg = @{ type = 'Daily'; startDateTime = '2026-01-01T00:00:00'; endDateTime = '2026-12-31T00:00:00'; localTimeZoneId = 'UTC'; times = @('06:00') }
+    New-FabricLakehouseRefreshMaterializedLakeViewsSchedule -WorkspaceId $ws -LakehouseId $lh -Enabled $true -Configuration $cfg
+
+    Creates a daily refresh schedule.
+
+.OUTPUTS
+    System.Object
+    The created schedule object returned by the API.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/lakehouses/{lakehouseId}/jobs/RefreshMaterializedLakeViews/schedules
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function New-FabricLakehouseRefreshMaterializedLakeViewsSchedule {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$LakehouseId,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$Enabled,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable]$Configuration
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'lakehouses', $LakehouseId, 'jobs', 'RefreshMaterializedLakeViews', 'schedules')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                enabled       = $Enabled
+                configuration = $Configuration
+            }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Lakehouse '$LakehouseId'", "Create RefreshMaterializedLakeViews schedule")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "RefreshMaterializedLakeViews schedule created for lakehouse '$LakehouseId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to create RefreshMaterializedLakeViews schedule for lakehouse '$LakehouseId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Lakehouse\New-FabricLakehouseRefreshMaterializedLakeViewsSchedule.ps1' 92
 #Region '.\Public\Lakehouse\Remove-FabricLakehouse.ps1' -1
 
 <#
@@ -31668,6 +31762,83 @@ function Remove-FabricLakehouse {
     }
 }
 #EndRegion '.\Public\Lakehouse\Remove-FabricLakehouse.ps1' 70
+#Region '.\Public\Lakehouse\Remove-FabricLakehouseRefreshMaterializedLakeViewsSchedule.ps1' -1
+
+<#
+.SYNOPSIS
+    Removes a schedule of the Refresh Materialized Lake Views job of a Fabric lakehouse.
+
+.DESCRIPTION
+    The Remove-FabricLakehouseRefreshMaterializedLakeViewsSchedule function deletes a schedule for
+    the lakehouse RefreshMaterializedLakeViews background job via
+    `DELETE /workspaces/{workspaceId}/lakehouses/{lakehouseId}/jobs/RefreshMaterializedLakeViews/schedules/{scheduleId}`.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the lakehouse. Mandatory.
+
+.PARAMETER LakehouseId
+    The unique identifier of the lakehouse. Mandatory.
+
+.PARAMETER ScheduleId
+    The unique identifier of the schedule to remove. Mandatory. Binds from the pipeline via the 'id'
+    alias.
+
+.EXAMPLE
+    Remove-FabricLakehouseRefreshMaterializedLakeViewsSchedule -WorkspaceId $ws -LakehouseId $lh -ScheduleId $sc
+
+    Deletes the specified refresh schedule.
+
+.OUTPUTS
+    None.
+
+.NOTES
+    - API Endpoint: DELETE /workspaces/{workspaceId}/lakehouses/{lakehouseId}/jobs/RefreshMaterializedLakeViews/schedules/{scheduleId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Remove-FabricLakehouseRefreshMaterializedLakeViewsSchedule {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$LakehouseId,
+
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ScheduleId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'lakehouses', $LakehouseId, 'jobs', 'RefreshMaterializedLakeViews', 'schedules', $ScheduleId)
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            if ($PSCmdlet.ShouldProcess("Schedule '$ScheduleId' on lakehouse '$LakehouseId'", "Delete")) {
+                $apiParams = @{
+                    BaseURI = $apiEndpointURI
+                    Headers = $script:FabricAuthContext.FabricHeaders
+                    Method  = 'Delete'
+                }
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "RefreshMaterializedLakeViews schedule '$ScheduleId' removed from lakehouse '$LakehouseId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to remove RefreshMaterializedLakeViews schedule '$ScheduleId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Lakehouse\Remove-FabricLakehouseRefreshMaterializedLakeViewsSchedule.ps1' 75
 #Region '.\Public\Lakehouse\Start-FabricLakehouseRefreshMaterializedLakeView.ps1' -1
 
 <#
@@ -32172,6 +32343,106 @@ function Update-FabricLakehouseDefinition {
     }
 }
 #EndRegion '.\Public\Lakehouse\Update-FabricLakehouseDefinition.ps1' 91
+#Region '.\Public\Lakehouse\Update-FabricLakehouseRefreshMaterializedLakeViewsSchedule.ps1' -1
+
+<#
+.SYNOPSIS
+    Updates a schedule of the Refresh Materialized Lake Views job of a Fabric lakehouse.
+
+.DESCRIPTION
+    The Update-FabricLakehouseRefreshMaterializedLakeViewsSchedule function updates an existing
+    schedule for the lakehouse RefreshMaterializedLakeViews background job via
+    `PATCH /workspaces/{workspaceId}/lakehouses/{lakehouseId}/jobs/RefreshMaterializedLakeViews/schedules/{scheduleId}`.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the lakehouse. Mandatory.
+
+.PARAMETER LakehouseId
+    The unique identifier of the lakehouse. Mandatory.
+
+.PARAMETER ScheduleId
+    The unique identifier of the schedule to update. Mandatory. Binds from the pipeline via the 'id'
+    alias.
+
+.PARAMETER Enabled
+    Whether the schedule is enabled. Mandatory.
+
+.PARAMETER Configuration
+    The schedule configuration hashtable. Mandatory.
+
+.EXAMPLE
+    Update-FabricLakehouseRefreshMaterializedLakeViewsSchedule -WorkspaceId $ws -LakehouseId $lh -ScheduleId $sc -Enabled $false -Configuration $cfg
+
+    Disables and reconfigures the schedule.
+
+.OUTPUTS
+    System.Object
+    The updated schedule object returned by the API.
+
+.NOTES
+    - API Endpoint: PATCH /workspaces/{workspaceId}/lakehouses/{lakehouseId}/jobs/RefreshMaterializedLakeViews/schedules/{scheduleId}
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricLakehouseRefreshMaterializedLakeViewsSchedule {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$LakehouseId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$ScheduleId,
+
+        [Parameter(Mandatory = $true)]
+        [bool]$Enabled,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable]$Configuration
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'lakehouses', $LakehouseId, 'jobs', 'RefreshMaterializedLakeViews', 'schedules', $ScheduleId)
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{
+                enabled       = $Enabled
+                configuration = $Configuration
+            }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Patch'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Schedule '$ScheduleId' on lakehouse '$LakehouseId'", "Update RefreshMaterializedLakeViews schedule")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "RefreshMaterializedLakeViews schedule '$ScheduleId' updated for lakehouse '$LakehouseId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to update RefreshMaterializedLakeViews schedule '$ScheduleId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Lakehouse\Update-FabricLakehouseRefreshMaterializedLakeViewsSchedule.ps1' 98
 #Region '.\Public\Lakehouse\Write-FabricLakehouseTableData.ps1' -1
 
 <#
@@ -33251,6 +33522,348 @@ function Update-FabricMapDefinition {
     }
 }
 #EndRegion '.\Public\Map\Update-FabricMapDefinition.ps1' 126
+#Region '.\Public\Mirrored Azure Databricks Catalog\Get-FabricAzureDatabricksCatalog.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists the Azure Databricks catalogs discoverable from a Fabric workspace.
+
+.DESCRIPTION
+    The Get-FabricAzureDatabricksCatalog function retrieves the Azure Databricks Unity Catalog
+    catalogs reachable through a Databricks workspace connection via
+    `GET /workspaces/{workspaceId}/azuredatabricks/catalogs`. Results are auto-paginated.
+
+    By default each catalog is enriched with a resolved WorkspaceName and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace. Mandatory.
+
+.PARAMETER DatabricksWorkspaceConnectionId
+    The unique identifier of the Databricks workspace connection to enumerate catalogs through.
+    Mandatory.
+
+.PARAMETER MaxResults
+    Optional maximum number of results to return per page.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricAzureDatabricksCatalog -WorkspaceId $ws -DatabricksWorkspaceConnectionId $conn
+
+    Lists the Databricks catalogs reachable through the connection.
+
+.OUTPUTS
+    System.Object
+    Catalog object(s) with all API-returned properties (name, catalogType, storageLocation,
+    fullName) plus a resolved WorkspaceName when enriched.
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/azuredatabricks/catalogs
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricAzureDatabricksCatalog {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DatabricksWorkspaceConnectionId,
+
+        [Parameter()]
+        [int]$MaxResults,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $queryParams = @{ databricksWorkspaceConnectionId = $DatabricksWorkspaceConnectionId }
+            if ($PSBoundParameters.ContainsKey('MaxResults')) { $queryParams.maxResults = $MaxResults }
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'azuredatabricks', 'catalogs') -QueryParameters $queryParams
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No Databricks catalogs found for workspace '$WorkspaceId'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $workspaceName = $WorkspaceId
+            try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+            catch { $workspaceName = $WorkspaceId }
+
+            foreach ($catalog in $response) {
+                $catalog | Add-Member -NotePropertyName 'workspaceId'   -NotePropertyValue $WorkspaceId   -Force
+                $catalog | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.DatabricksCatalog'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve Databricks catalogs for workspace '$WorkspaceId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Mirrored Azure Databricks Catalog\Get-FabricAzureDatabricksCatalog.ps1' 104
+#Region '.\Public\Mirrored Azure Databricks Catalog\Get-FabricAzureDatabricksSchema.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists the schemas of an Azure Databricks catalog discoverable from a Fabric workspace.
+
+.DESCRIPTION
+    The Get-FabricAzureDatabricksSchema function retrieves the schemas of an Azure Databricks Unity
+    Catalog catalog via
+    `GET /workspaces/{workspaceId}/azuredatabricks/catalogs/{catalogName}/schemas`. Results are
+    auto-paginated.
+
+    By default each schema is enriched with a resolved WorkspaceName and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace. Mandatory.
+
+.PARAMETER CatalogName
+    The name of the Databricks catalog whose schemas are listed. Mandatory.
+
+.PARAMETER DatabricksWorkspaceConnectionId
+    The unique identifier of the Databricks workspace connection. Mandatory.
+
+.PARAMETER MaxResults
+    Optional maximum number of results to return per page.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricAzureDatabricksSchema -WorkspaceId $ws -CatalogName 'main' -DatabricksWorkspaceConnectionId $conn
+
+    Lists the schemas in the 'main' catalog.
+
+.OUTPUTS
+    System.Object
+    Schema object(s) with all API-returned properties (name, storageLocation, fullName) plus a
+    resolved WorkspaceName when enriched.
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/azuredatabricks/catalogs/{catalogName}/schemas
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricAzureDatabricksSchema {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$CatalogName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DatabricksWorkspaceConnectionId,
+
+        [Parameter()]
+        [int]$MaxResults,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $queryParams = @{ databricksWorkspaceConnectionId = $DatabricksWorkspaceConnectionId }
+            if ($PSBoundParameters.ContainsKey('MaxResults')) { $queryParams.maxResults = $MaxResults }
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'azuredatabricks', 'catalogs', $CatalogName, 'schemas') -QueryParameters $queryParams
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No schemas found for catalog '$CatalogName'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $workspaceName = $WorkspaceId
+            try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+            catch { $workspaceName = $WorkspaceId }
+
+            foreach ($schema in $response) {
+                $schema | Add-Member -NotePropertyName 'workspaceId'   -NotePropertyValue $WorkspaceId   -Force
+                $schema | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+                $schema | Add-Member -NotePropertyName 'CatalogName'   -NotePropertyValue $CatalogName   -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.DatabricksSchema'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve schemas for catalog '$CatalogName'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Mirrored Azure Databricks Catalog\Get-FabricAzureDatabricksSchema.ps1' 112
+#Region '.\Public\Mirrored Azure Databricks Catalog\Get-FabricAzureDatabricksTable.ps1' -1
+
+<#
+.SYNOPSIS
+    Lists the tables of an Azure Databricks schema discoverable from a Fabric workspace.
+
+.DESCRIPTION
+    The Get-FabricAzureDatabricksTable function retrieves the tables of an Azure Databricks Unity
+    Catalog schema via
+    `GET /workspaces/{workspaceId}/azuredatabricks/catalogs/{catalogName}/schemas/{schemaName}/tables`.
+    Results are auto-paginated.
+
+    By default each table is enriched with a resolved WorkspaceName and decorated for the custom
+    table view. Pass -Raw to return the untouched API response.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace. Mandatory.
+
+.PARAMETER CatalogName
+    The name of the Databricks catalog. Mandatory.
+
+.PARAMETER SchemaName
+    The name of the schema whose tables are listed. Mandatory.
+
+.PARAMETER DatabricksWorkspaceConnectionId
+    The unique identifier of the Databricks workspace connection. Mandatory.
+
+.PARAMETER MaxResults
+    Optional maximum number of results to return per page.
+
+.PARAMETER Raw
+    If specified, returns the untouched API response with no added properties or type decoration.
+
+.EXAMPLE
+    Get-FabricAzureDatabricksTable -WorkspaceId $ws -CatalogName 'main' -SchemaName 'sales' -DatabricksWorkspaceConnectionId $conn
+
+    Lists the tables in the 'main.sales' schema.
+
+.OUTPUTS
+    System.Object
+    Table object(s) with all API-returned properties (name, storageLocation, fullName, tableType,
+    dataSourceFormat) plus a resolved WorkspaceName when enriched.
+
+.NOTES
+    - API Endpoint: GET /workspaces/{workspaceId}/azuredatabricks/catalogs/{catalogName}/schemas/{schemaName}/tables
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Get-FabricAzureDatabricksTable {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$CatalogName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$SchemaName,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DatabricksWorkspaceConnectionId,
+
+        [Parameter()]
+        [int]$MaxResults,
+
+        [Parameter()]
+        [switch]$Raw
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $queryParams = @{ databricksWorkspaceConnectionId = $DatabricksWorkspaceConnectionId }
+            if ($PSBoundParameters.ContainsKey('MaxResults')) { $queryParams.maxResults = $MaxResults }
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'azuredatabricks', 'catalogs', $CatalogName, 'schemas', $SchemaName, 'tables') -QueryParameters $queryParams
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Get'
+            }
+            $response = Invoke-FabricAPIRequest @apiParams
+
+            if (-not $response) {
+                Write-FabricLog -Message "No tables found for schema '$SchemaName' in catalog '$CatalogName'." -Level Warning
+                return $null
+            }
+
+            if ($Raw) {
+                return $response
+            }
+
+            $workspaceName = $WorkspaceId
+            try { $workspaceName = Resolve-FabricWorkspaceName -WorkspaceId $WorkspaceId }
+            catch { $workspaceName = $WorkspaceId }
+
+            foreach ($table in $response) {
+                $table | Add-Member -NotePropertyName 'workspaceId'   -NotePropertyValue $WorkspaceId   -Force
+                $table | Add-Member -NotePropertyName 'WorkspaceName' -NotePropertyValue $workspaceName -Force
+                $table | Add-Member -NotePropertyName 'CatalogName'   -NotePropertyValue $CatalogName   -Force
+                $table | Add-Member -NotePropertyName 'SchemaName'    -NotePropertyValue $SchemaName    -Force
+            }
+
+            $response | Add-FabricTypeName -TypeName 'MicrosoftFabric.DatabricksTable'
+            $response
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to retrieve tables for schema '$SchemaName'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Mirrored Azure Databricks Catalog\Get-FabricAzureDatabricksTable.ps1' 120
 #Region '.\Public\Mirrored Azure Databricks Catalog\Get-FabricMirroredAzureDatabricksCatalog.ps1' -1
 
 <#
@@ -33886,6 +34499,80 @@ function Update-FabricMirroredAzureDatabricksCatalogDefinition {
     }
 }
 #EndRegion '.\Public\Mirrored Azure Databricks Catalog\Update-FabricMirroredAzureDatabricksCatalogDefinition.ps1' 126
+#Region '.\Public\Mirrored Azure Databricks Catalog\Update-FabricMirroredAzureDatabricksCatalogMetadata.ps1' -1
+
+<#
+.SYNOPSIS
+    Refreshes the catalog metadata of a mirrored Azure Databricks catalog.
+
+.DESCRIPTION
+    The Update-FabricMirroredAzureDatabricksCatalogMetadata function triggers a metadata refresh of a
+    mirrored Azure Databricks catalog via
+    `POST /workspaces/{workspaceId}/mirroredAzureDatabricksCatalogs/{mirroredAzureDatabricksCatalogId}/refreshCatalogMetadata`,
+    re-syncing the mirrored catalog with its Databricks source. The call is long-running; the module
+    transparently waits for completion.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the mirrored catalog. Mandatory.
+
+.PARAMETER MirroredAzureDatabricksCatalogId
+    The unique identifier of the mirrored Azure Databricks catalog to refresh. Mandatory. Binds from
+    the pipeline via the 'id' alias.
+
+.EXAMPLE
+    Update-FabricMirroredAzureDatabricksCatalogMetadata -WorkspaceId $ws -MirroredAzureDatabricksCatalogId $cat
+
+    Refreshes the mirrored catalog's metadata from its Databricks source.
+
+.OUTPUTS
+    System.Object
+    The API response (or completed long-running operation result).
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/mirroredAzureDatabricksCatalogs/{mirroredAzureDatabricksCatalogId}/refreshCatalogMetadata
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Update-FabricMirroredAzureDatabricksCatalogMetadata {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$MirroredAzureDatabricksCatalogId
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'mirroredAzureDatabricksCatalogs', $MirroredAzureDatabricksCatalogId, 'refreshCatalogMetadata')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+            }
+
+            if ($PSCmdlet.ShouldProcess("Mirrored catalog '$MirroredAzureDatabricksCatalogId'", "Refresh catalog metadata")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Metadata refresh triggered for mirrored catalog '$MirroredAzureDatabricksCatalogId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to refresh metadata for mirrored catalog '$MirroredAzureDatabricksCatalogId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Mirrored Azure Databricks Catalog\Update-FabricMirroredAzureDatabricksCatalogMetadata.ps1' 72
 #Region '.\Public\Mirrored Database\Get-FabricMirroredDatabase.ps1' -1
 
 <#
@@ -42656,6 +43343,91 @@ function Remove-FabricSemanticModel {
     }
 }
 #EndRegion '.\Public\Semantic Model\Remove-FabricSemanticModel.ps1' 68
+#Region '.\Public\Semantic Model\Set-FabricSemanticModelConnection.ps1' -1
+
+<#
+.SYNOPSIS
+    Binds a Fabric semantic model to a connection.
+
+.DESCRIPTION
+    The Set-FabricSemanticModelConnection function binds a semantic model to a data connection via
+    `POST /workspaces/{workspaceId}/semanticModels/{semanticModelId}/bindConnection`.
+
+.PARAMETER WorkspaceId
+    The unique identifier of the workspace containing the semantic model. Mandatory.
+
+.PARAMETER SemanticModelId
+    The unique identifier of the semantic model to bind. Mandatory. Binds from the pipeline via the
+    'id' alias.
+
+.PARAMETER ConnectionBinding
+    A hashtable describing the connection binding, with 'connectionDetails' (required) and optionally
+    'id' and 'connectivityType'. Mandatory.
+
+.EXAMPLE
+    $binding = @{ id = $connectionId; connectivityType = 'ShareableCloud'; connectionDetails = @{ ... } }
+    Set-FabricSemanticModelConnection -WorkspaceId $ws -SemanticModelId $sm -ConnectionBinding $binding
+
+    Binds the semantic model to the specified connection.
+
+.OUTPUTS
+    System.Object
+    The API response.
+
+.NOTES
+    - API Endpoint: POST /workspaces/{workspaceId}/semanticModels/{semanticModelId}/bindConnection
+    - Requires: authentication via Connect-FabricAccount / Set-FabricApiHeaders.
+
+    Author: Tiago Balabuch, Jess Pomfret, Rob Sewell
+#>
+function Set-FabricSemanticModelConnection {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$WorkspaceId,
+
+        [Parameter(Mandatory = $true, ValueFromPipelineByPropertyName = $true)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('id')]
+        [string]$SemanticModelId,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [hashtable]$ConnectionBinding
+    )
+
+    process {
+        try {
+            Invoke-FabricAuthCheck -ThrowOnFailure
+
+            $apiEndpointURI = New-FabricAPIUri -Segments @('workspaces', $WorkspaceId, 'semanticModels', $SemanticModelId, 'bindConnection')
+            Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
+
+            $body = @{ connectionBinding = $ConnectionBinding }
+            $bodyJson = $body | ConvertTo-Json -Depth 10
+            Write-FabricLog -Message "Request Body: $bodyJson" -Level Debug
+
+            $apiParams = @{
+                BaseURI = $apiEndpointURI
+                Headers = $script:FabricAuthContext.FabricHeaders
+                Method  = 'Post'
+                Body    = $bodyJson
+            }
+
+            if ($PSCmdlet.ShouldProcess("Semantic model '$SemanticModelId'", "Bind connection")) {
+                $response = Invoke-FabricAPIRequest @apiParams
+                Write-FabricLog -Message "Connection bound to semantic model '$SemanticModelId'." -Level Host
+                $response
+            }
+        }
+        catch {
+            $errorDetails = $_.Exception.Message
+            Write-FabricLog -Message "Failed to bind connection to semantic model '$SemanticModelId'. Error: $errorDetails" -Level Error
+        }
+    }
+}
+#EndRegion '.\Public\Semantic Model\Set-FabricSemanticModelConnection.ps1' 83
 #Region '.\Public\Semantic Model\Update-FabricSemanticModel.ps1' -1
 
 <#
@@ -52639,7 +53411,7 @@ function Update-FabricWarehouseSnapshot {
 
 
         # Construct the API endpoint URI
-        $apiEndpointURI = "{0}/workspaces/{1}/warehouses/{2}" -f $script:FabricAuthContext.BaseUrl, $WorkspaceId, $WarehouseId
+        $apiEndpointURI = "{0}/workspaces/{1}/warehousesnapshots/{2}" -f $script:FabricAuthContext.BaseUrl, $WorkspaceId, $WarehouseSnapshotId
         Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
 
         # Construct the request body

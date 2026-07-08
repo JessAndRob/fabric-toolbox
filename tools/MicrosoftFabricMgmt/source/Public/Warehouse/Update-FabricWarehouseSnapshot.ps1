@@ -61,7 +61,7 @@ function Update-FabricWarehouseSnapshot {
 
 
         # Construct the API endpoint URI
-        $apiEndpointURI = "{0}/workspaces/{1}/warehouses/{2}" -f $script:FabricAuthContext.BaseUrl, $WorkspaceId, $WarehouseId
+        $apiEndpointURI = "{0}/workspaces/{1}/warehousesnapshots/{2}" -f $script:FabricAuthContext.BaseUrl, $WorkspaceId, $WarehouseSnapshotId
         Write-FabricLog -Message "API Endpoint: $apiEndpointURI" -Level Debug
 
         # Construct the request body
